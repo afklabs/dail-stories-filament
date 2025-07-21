@@ -7,14 +7,21 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\API\StoryIndexRequest;
 use App\Http\Requests\API\StoryRatingRequest;
+use App\Http\Requests\ReadingProgressRequest;
 use App\Http\Requests\RecordViewRequest;
 use App\Http\Requests\StoryInteractionRequest;
-use App\Http\Requests\ReadingProgressRequest;
+use App\Models\MemberReadingHistory;
+use App\Models\MemberStoryInteraction;
+use App\Models\MemberStoryRating;
+use App\Models\Story;
+use App\Models\StoryRatingAggregate;
+use App\Models\StoryView;
 use App\Services\SecureQueryBuilder;
-use App\Models\{Story, StoryView, MemberStoryInteraction, MemberStoryRating, StoryRatingAggregate, MemberReadingHistory};
-use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\{DB, Log, Cache};
-use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class StoryController extends Controller
 {
@@ -42,7 +49,7 @@ class StoryController extends Controller
                 ->where('active_from', '<=', now())
                 ->where(function ($q) {
                     $q->whereNull('active_until')
-                      ->orWhere('active_until', '>', now());
+                        ->orWhere('active_until', '>', now());
                 })
                 ->select([
                     'id',
@@ -56,11 +63,11 @@ class StoryController extends Controller
                     'active_from',
                     'active_until',
                     'created_at',
-                    'updated_at'
+                    'updated_at',
                 ])
                 ->with([
                     'category:id,name',
-                    'tags:id,name'
+                    'tags:id,name',
                 ]);
 
             // Apply filters
@@ -96,11 +103,11 @@ class StoryController extends Controller
                 'meta' => [
                     'total_count' => $stories->total(),
                     'active_stories' => Story::where('active', true)->count(),
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
             Log::error('Stories index error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load stories',
@@ -116,7 +123,7 @@ class StoryController extends Controller
     {
         try {
             // Check if story is active
-            if (!$story->active || 
+            if (! $story->active ||
                 ($story->active_from && $story->active_from > now()) ||
                 ($story->active_until && $story->active_until < now())) {
                 return response()->json([
@@ -126,12 +133,12 @@ class StoryController extends Controller
             }
 
             $memberId = auth('sanctum')->id();
-            
+
             // Load relationships
             $story->load([
                 'category:id,name',
                 'tags:id,name',
-                'ratingAggregate'
+                'ratingAggregate',
             ]);
 
             // Add member-specific data
@@ -147,9 +154,9 @@ class StoryController extends Controller
         } catch (\Exception $e) {
             Log::error('Story show error', [
                 'story_id' => $story->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load story',
@@ -164,7 +171,7 @@ class StoryController extends Controller
     {
         try {
             $cacheKey = "story_stats_{$story->id}";
-            
+
             $stats = Cache::remember($cacheKey, 300, function () use ($story) {
                 return [
                     'views' => $story->views ?? 0,
@@ -188,7 +195,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Story stats error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load statistics',
@@ -220,7 +227,7 @@ class StoryController extends Controller
                 ->where('viewed_at', '>', now()->subHours(24))
                 ->first();
 
-            if (!$existingView) {
+            if (! $existingView) {
                 // Create new view record
                 StoryView::create([
                     'story_id' => $story->id,
@@ -255,7 +262,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Record view error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to record view',
@@ -295,7 +302,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get rating error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load rating',
@@ -335,7 +342,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Submit rating error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to submit rating',
@@ -373,7 +380,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Record interaction error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to record interaction',
@@ -409,7 +416,7 @@ class StoryController extends Controller
             ], 404);
         } catch (\Exception $e) {
             Log::error('Remove interaction error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to remove interaction',
@@ -424,7 +431,7 @@ class StoryController extends Controller
     {
         try {
             $memberId = auth('sanctum')->id();
-            
+
             $progress = MemberReadingHistory::where([
                 'member_id' => $memberId,
                 'story_id' => $story->id,
@@ -441,7 +448,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get reading progress error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load reading progress',
@@ -480,7 +487,7 @@ class StoryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Update reading progress error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update reading progress',
@@ -492,7 +499,7 @@ class StoryController extends Controller
     private function addMemberInteractions($stories, int $memberId): void
     {
         $storyIds = collect($stories)->pluck('id')->toArray();
-        
+
         // Get member ratings
         $ratings = MemberStoryRating::where('member_id', $memberId)
             ->whereIn('story_id', $storyIds)
@@ -512,7 +519,7 @@ class StoryController extends Controller
         // Add to each story
         foreach ($stories as $story) {
             $storyInteractions = $interactions[$story->id] ?? [];
-            
+
             $story->member_interactions = [
                 'has_rated' => isset($ratings[$story->id]),
                 'rating' => $ratings[$story->id] ?? null,
@@ -568,7 +575,7 @@ class StoryController extends Controller
     private function updateRatingAggregate(int $storyId): void
     {
         $ratings = MemberStoryRating::where('story_id', $storyId)->get();
-        
+
         if ($ratings->isEmpty()) {
             return;
         }
@@ -576,7 +583,7 @@ class StoryController extends Controller
         $totalRatings = $ratings->count();
         $sumRatings = $ratings->sum('rating');
         $averageRating = $sumRatings / $totalRatings;
-        
+
         $distribution = [];
         for ($i = 1; $i <= 5; $i++) {
             $distribution[$i] = $ratings->where('rating', $i)->count();

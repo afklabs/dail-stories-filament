@@ -4,9 +4,9 @@ namespace App\Filament\Resources\RoleResource\Pages;
 
 use App\Filament\Resources\RoleResource;
 use Filament\Actions;
-use Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
+use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\FontWeight;
 
 class ViewRole extends ViewRecord
@@ -25,6 +25,7 @@ class ViewRole extends ViewRecord
                     if ($usersCount > 0) {
                         return "This role is assigned to {$usersCount} user(s). Deleting it will remove their permissions. Are you sure?";
                     }
+
                     return 'Are you sure you want to delete this role?';
                 }),
 
@@ -42,7 +43,7 @@ class ViewRole extends ViewRecord
                 ->action(function (array $data) {
                     $user = \App\Models\User::find($data['user_id']);
                     $user->assignRole($this->record);
-                    
+
                     \Filament\Notifications\Notification::make()
                         ->success()
                         ->title('Role assigned')
@@ -58,8 +59,8 @@ class ViewRole extends ViewRecord
                     $permissions = $this->record->permissions->pluck('name')->toArray();
                     $content = "Role: {$this->record->name}\n";
                     $content .= "Guard: {$this->record->guard_name}\n";
-                    $content .= "Permissions:\n" . implode("\n", $permissions);
-                    
+                    $content .= "Permissions:\n".implode("\n", $permissions);
+
                     return response()->streamDownload(function () use ($content) {
                         echo $content;
                     }, "role_{$this->record->name}_permissions.txt");

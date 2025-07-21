@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\CategoryResource\Pages;
 
 use App\Filament\Resources\CategoryResource;
-use Filament\Actions;
-use Filament\Resources\Pages\CreateRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Str;
 
 class CreateCategory extends CreateRecord
@@ -28,16 +27,16 @@ class CreateCategory extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         // Auto-generate slug if not provided
-        if (empty($data['slug']) && !empty($data['name'])) {
+        if (empty($data['slug']) && ! empty($data['name'])) {
             $data['slug'] = Str::slug($data['name']);
         }
 
         // Ensure slug is unique
         $originalSlug = $data['slug'];
         $counter = 1;
-        
+
         while (\App\Models\Category::where('slug', $data['slug'])->exists()) {
-            $data['slug'] = $originalSlug . '-' . $counter;
+            $data['slug'] = $originalSlug.'-'.$counter;
             $counter++;
         }
 

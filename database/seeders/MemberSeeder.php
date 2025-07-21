@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Member;
+use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Faker\Factory as Faker;
 
 class MemberSeeder extends Seeder
 {
@@ -38,16 +38,13 @@ class MemberSeeder extends Seeder
             ],
         ];
 
-        foreach ($testMembers as $memberData)
-        {
+        foreach ($testMembers as $memberData) {
             Member::create($memberData);
         }
 
         // Create random members for development
-        if (app()->environment('local', 'development'))
-        {
-            for ($i = 1; $i <= 50; $i++)
-            {
+        if (app()->environment('local', 'development')) {
+            for ($i = 1; $i <= 50; $i++) {
                 Member::create([
                     'name' => $faker->name,
                     'email' => $faker->unique()->safeEmail,

@@ -48,14 +48,14 @@ abstract class BaseAdminController extends Controller
      */
     protected function checkRateLimit(string $key, int $maxAttempts = 10, int $decayMinutes = 1): bool
     {
-        $key = "rate_limit:{$key}:" . auth()->id();
-        
+        $key = "rate_limit:{$key}:".auth()->id();
+
         if (Cache::get($key, 0) >= $maxAttempts) {
             return false;
         }
-        
+
         Cache::put($key, Cache::get($key, 0) + 1, now()->addMinutes($decayMinutes));
-        
+
         return true;
     }
 }

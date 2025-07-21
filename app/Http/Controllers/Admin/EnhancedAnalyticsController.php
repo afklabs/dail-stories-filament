@@ -3,11 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Story, StoryView, Member, MemberStoryInteraction, MemberStoryRating, StoryRatingAggregate, StoryPublishingHistory, MemberReadingHistory};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Cache, Log, DB};
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\MemberStoryInteraction;
+use App\Models\MemberStoryRating;
+use App\Models\Story;
+use App\Models\StoryRatingAggregate;
+use App\Models\StoryView;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EnhancedAnalyticsController extends Controller
 {
@@ -19,10 +25,10 @@ class EnhancedAnalyticsController extends Controller
         try {
             $period = $request->integer('period', 30);
             $period = min(max($period, 1), 90); // Limit between 1-90 days
-            
+
             $data = Cache::remember("realtime_analytics_{$period}", 120, function () use ($period) {
                 $dateFrom = now()->subDays($period);
-                
+
                 return [
                     'overview' => $this->getRealtimeOverview($dateFrom),
                     'trends' => $this->getRealtimeTrends($dateFrom, $period),
@@ -40,7 +46,7 @@ class EnhancedAnalyticsController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Real-time analytics error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load real-time analytics',
@@ -57,12 +63,12 @@ class EnhancedAnalyticsController extends Controller
         try {
             $story = Story::findOrFail($storyId);
             $period = $request->integer('period', 30);
-            
+
             $cacheKey = "story_analytics_{$storyId}_{$period}";
-            
+
             $data = Cache::remember($cacheKey, 600, function () use ($story, $period) {
                 $dateFrom = now()->subDays($period);
-                
+
                 return [
                     'story_info' => [
                         'id' => $story->id,
@@ -88,9 +94,9 @@ class EnhancedAnalyticsController extends Controller
         } catch (\Exception $e) {
             Log::error('Story analytics error', [
                 'story_id' => $storyId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load story analytics',
@@ -105,12 +111,12 @@ class EnhancedAnalyticsController extends Controller
     {
         try {
             $period = $request->integer('period', 30);
-            
+
             $cacheKey = "audience_insights_{$period}";
-            
+
             $data = Cache::remember($cacheKey, 900, function () use ($period) {
                 $dateFrom = now()->subDays($period);
-                
+
                 return [
                     'demographics' => $this->getAudienceDemographics($dateFrom),
                     'behavior_patterns' => $this->getBehaviorPatterns($dateFrom),
@@ -127,7 +133,7 @@ class EnhancedAnalyticsController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Audience insights error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load audience insights',
@@ -144,12 +150,12 @@ class EnhancedAnalyticsController extends Controller
             $metric = $request->string('metric', 'views'); // views, rating, engagement
             $limit = $request->integer('limit', 20);
             $period = $request->integer('period', 30);
-            
+
             $cacheKey = "content_rankings_{$metric}_{$limit}_{$period}";
-            
+
             $data = Cache::remember($cacheKey, 600, function () use ($metric, $limit, $period) {
                 $dateFrom = now()->subDays($period);
-                
+
                 return [
                     'top_performers' => $this->getTopPerformers($metric, $limit, $dateFrom),
                     'category_breakdown' => $this->getCategoryPerformance($metric, $dateFrom),
@@ -166,7 +172,7 @@ class EnhancedAnalyticsController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Content rankings error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load content rankings',
@@ -181,12 +187,12 @@ class EnhancedAnalyticsController extends Controller
     {
         try {
             $period = $request->integer('period', 30);
-            
+
             $cacheKey = "publishing_analytics_{$period}";
-            
+
             $data = Cache::remember($cacheKey, 600, function () use ($period) {
                 $dateFrom = now()->subDays($period);
-                
+
                 return [
                     'activity_summary' => $this->getPublishingActivitySummary($dateFrom),
                     'user_activity' => $this->getPublishingUserActivity($dateFrom),
@@ -202,7 +208,7 @@ class EnhancedAnalyticsController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Publishing analytics error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load publishing analytics',
@@ -280,18 +286,18 @@ class EnhancedAnalyticsController extends Controller
                 ->select('stories.id', 'stories.title', 'story_rating_aggregates.average_rating', 'story_rating_aggregates.total_ratings')
                 ->limit(5)
                 ->get(),
-            
+
             'most_viewed' => Story::withCount(['storyViews as period_views' => function ($query) use ($dateFrom) {
-                    $query->where('viewed_at', '>=', $dateFrom);
-                }])
+                $query->where('viewed_at', '>=', $dateFrom);
+            }])
                 ->orderByDesc('period_views')
                 ->select('id', 'title')
                 ->limit(5)
                 ->get(),
 
             'most_engaged' => Story::withCount(['interactions as period_interactions' => function ($query) use ($dateFrom) {
-                    $query->where('created_at', '>=', $dateFrom);
-                }])
+                $query->where('created_at', '>=', $dateFrom);
+            }])
                 ->orderByDesc('period_interactions')
                 ->select('id', 'title')
                 ->limit(5)
@@ -303,7 +309,7 @@ class EnhancedAnalyticsController extends Controller
     {
         $totalViews = StoryView::where('viewed_at', '>=', $dateFrom)->count();
         $memberViews = StoryView::where('viewed_at', '>=', $dateFrom)->whereNotNull('member_id')->count();
-        
+
         return [
             'member_percentage' => $totalViews > 0 ? round(($memberViews / $totalViews) * 100, 1) : 0,
             'guest_percentage' => $totalViews > 0 ? round((($totalViews - $memberViews) / $totalViews) * 100, 1) : 0,
@@ -316,7 +322,7 @@ class EnhancedAnalyticsController extends Controller
     {
         $views = $story->storyViews()->where('viewed_at', '>=', $dateFrom);
         $interactions = $story->interactions()->where('created_at', '>=', $dateFrom);
-        
+
         return [
             'total_views' => $views->count(),
             'unique_viewers' => $views->distinct('device_id')->count(),
@@ -363,13 +369,13 @@ class EnhancedAnalyticsController extends Controller
     private function getStorySentimentAnalysis(Story $story, Carbon $dateFrom): array
     {
         $interactions = $story->interactions()->where('created_at', '>=', $dateFrom);
-        
+
         $positive = $interactions->clone()->whereIn('action', ['like', 'bookmark', 'share'])->count();
         $negative = $interactions->clone()->whereIn('action', ['dislike', 'report'])->count();
         $neutral = $interactions->clone()->whereIn('action', ['view'])->count();
-        
+
         $total = $positive + $negative + $neutral;
-        
+
         return [
             'sentiment_score' => $total > 0 ? round((($positive - $negative) / $total) * 100, 1) : 0,
             'positive_percentage' => $total > 0 ? round(($positive / $total) * 100, 1) : 0,
@@ -409,14 +415,14 @@ class EnhancedAnalyticsController extends Controller
                     $q->where('viewed_at', '>=', $dateFrom);
                 }])->orderByDesc('metric_value');
                 break;
-            
+
             case 'rating':
                 $query->join('story_rating_aggregates', 'stories.id', '=', 'story_rating_aggregates.story_id')
                     ->where('story_rating_aggregates.total_ratings', '>=', 5)
                     ->orderByDesc('story_rating_aggregates.average_rating')
                     ->selectRaw('stories.*, story_rating_aggregates.average_rating as metric_value');
                 break;
-            
+
             case 'engagement':
                 $query->withCount(['interactions as metric_value' => function ($q) use ($dateFrom) {
                     $q->where('created_at', '>=', $dateFrom);
@@ -443,11 +449,11 @@ class EnhancedAnalyticsController extends Controller
             ->join('story_categories', 'stories.category_id', '=', 'story_categories.id')
             ->leftJoin('story_views', function ($join) use ($dateFrom) {
                 $join->on('stories.id', '=', 'story_views.story_id')
-                     ->where('story_views.viewed_at', '>=', $dateFrom);
+                    ->where('story_views.viewed_at', '>=', $dateFrom);
             })
             ->leftJoin('member_story_interactions', function ($join) use ($dateFrom) {
                 $join->on('stories.id', '=', 'member_story_interactions.story_id')
-                     ->where('member_story_interactions.created_at', '>=', $dateFrom);
+                    ->where('member_story_interactions.created_at', '>=', $dateFrom);
             })
             ->selectRaw('
                 story_categories.name as category,
@@ -473,28 +479,28 @@ class EnhancedAnalyticsController extends Controller
             },
             'storyViews as previous_views' => function ($query) use ($previous, $recent) {
                 $query->whereBetween('viewed_at', [$previous, $recent]);
-            }
+            },
         ])
-        ->having('recent_views', '>', 10) // Minimum threshold
-        ->get()
-        ->map(function ($story) {
-            $growth = $story->previous_views > 0 
-                ? (($story->recent_views - $story->previous_views) / $story->previous_views) * 100
-                : ($story->recent_views > 0 ? 100 : 0);
-            
-            return [
-                'id' => $story->id,
-                'title' => $story->title,
-                'recent_views' => $story->recent_views,
-                'previous_views' => $story->previous_views,
-                'growth_percentage' => round($growth, 1),
-            ];
-        })
-        ->where('growth_percentage', '>', 0)
-        ->sortByDesc('growth_percentage')
-        ->take(10)
-        ->values()
-        ->toArray();
+            ->having('recent_views', '>', 10) // Minimum threshold
+            ->get()
+            ->map(function ($story) {
+                $growth = $story->previous_views > 0
+                    ? (($story->recent_views - $story->previous_views) / $story->previous_views) * 100
+                    : ($story->recent_views > 0 ? 100 : 0);
+
+                return [
+                    'id' => $story->id,
+                    'title' => $story->title,
+                    'recent_views' => $story->recent_views,
+                    'previous_views' => $story->previous_views,
+                    'growth_percentage' => round($growth, 1),
+                ];
+            })
+            ->where('growth_percentage', '>', 0)
+            ->sortByDesc('growth_percentage')
+            ->take(10)
+            ->values()
+            ->toArray();
     }
 
     private function getQualityInsights(Carbon $dateFrom): array
@@ -529,7 +535,7 @@ class EnhancedAnalyticsController extends Controller
     {
         $totalReaders = $story->readingHistory()->count();
         $completedReaders = $story->readingHistory()->where('reading_progress', '>=', 100)->count();
-        
+
         return $totalReaders > 0 ? round(($completedReaders / $totalReaders) * 100, 1) : 0;
     }
 
@@ -569,14 +575,18 @@ class EnhancedAnalyticsController extends Controller
         $negative = $interactions->get('dislike', 0) + $interactions->get('report', 0);
         $total = $interactions->sum();
 
-        if ($total === 0) return 0;
+        if ($total === 0) {
+            return 0;
+        }
 
         return round((($positive - $negative) / $total) * 100, 1);
     }
 
     private function calculateContentHealthScore($ratingStats): float
     {
-        if (!$ratingStats || $ratingStats->total_rated_stories === 0) return 0;
+        if (! $ratingStats || $ratingStats->total_rated_stories === 0) {
+            return 0;
+        }
 
         $averageScore = ($ratingStats->overall_average / 5) * 50; // 50% weight
         $excellentRatio = ($ratingStats->excellent_count / $ratingStats->total_rated_stories) * 30; // 30% weight

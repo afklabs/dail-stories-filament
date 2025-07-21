@@ -13,8 +13,7 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('stories', function (Blueprint $table)
-        {
+        Schema::create('stories', function (Blueprint $table) {
             $table->id();
             $table->string('title');
             $table->longText('content');

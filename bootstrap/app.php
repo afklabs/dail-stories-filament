@@ -18,7 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             |--------------------------------------------------------------------------
             | Admin API Routes - Filament Integration
             |--------------------------------------------------------------------------
-            | 
+            |
             | These routes handle the admin panel API endpoints for Filament.
             | They're separated for better security, middleware, and performance.
             |
@@ -35,7 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
             |
             | You can add more route groups here as your application grows:
             | - Mobile API v2
-            | - Webhook endpoints  
+            | - Webhook endpoints
             | - Public widgets
             | - Partner integrations
             |
@@ -60,7 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
         | Global Middleware Configuration
         |--------------------------------------------------------------------------
         */
-        
+
         // Global middleware for all routes
         $middleware->append([
             \Illuminate\Http\Middleware\HandleCors::class,
@@ -71,7 +71,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
 
-        // Web-specific middleware  
+        // Web-specific middleware
         $middleware->web(append: [
             \Illuminate\Session\Middleware\StartSession::class,
         ]);
@@ -81,16 +81,16 @@ return Application::configure(basePath: dirname(__DIR__))
         | Route-Specific Middleware Aliases
         |--------------------------------------------------------------------------
         */
-        
+
         $middleware->alias([
             // Authentication middleware
             'auth.api' => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'auth.admin' => \App\Http\Middleware\EnsureUserIsAdmin::class, // Create this
-            
+
             // Security middleware
-            'throttle.api' => \Illuminate\Routing\Middleware\ThrottleRequests::class . ':60,1',
-            'throttle.admin' => \Illuminate\Routing\Middleware\ThrottleRequests::class . ':120,1',
-            
+            'throttle.api' => \Illuminate\Routing\Middleware\ThrottleRequests::class.':60,1',
+            'throttle.admin' => \Illuminate\Routing\Middleware\ThrottleRequests::class.':120,1',
+
             // Custom middleware
             'device.verification' => \App\Http\Middleware\VerifyDeviceId::class, // Create this
             'api.version' => \App\Http\Middleware\ApiVersionMiddleware::class, // Create this
@@ -101,7 +101,7 @@ return Application::configure(basePath: dirname(__DIR__))
         | Priority Middleware (High Performance)
         |--------------------------------------------------------------------------
         */
-        
+
         $middleware->priority([
             \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
@@ -119,7 +119,7 @@ return Application::configure(basePath: dirname(__DIR__))
         | Exception Handling for APIs
         |--------------------------------------------------------------------------
         */
-        
+
         // Custom API exception rendering
         $exceptions->render(function (\Illuminate\Validation\ValidationException $e, Request $request) {
             if ($request->is('api/*') || $request->is('admin/api/*')) {
@@ -168,10 +168,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (\Throwable $e, Request $request) {
             if ($request->is('api/*') || $request->is('admin/api/*')) {
                 // Don't expose sensitive information in production
-                $message = app()->environment('production') 
-                    ? 'Internal server error' 
+                $message = app()->environment('production')
+                    ? 'Internal server error'
                     : $e->getMessage();
-                
+
                 return response()->json([
                     'success' => false,
                     'message' => $message,

@@ -4,8 +4,8 @@ namespace App\Filament\Resources\PermissionResource\Pages;
 
 use App\Filament\Resources\PermissionResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\EditRecord;
 
 class EditPermission extends EditRecord
 {
@@ -21,10 +21,11 @@ class EditPermission extends EditRecord
                 ->modalDescription(function () {
                     $rolesCount = $this->record->roles()->count();
                     $usersCount = $this->record->users()->count();
-                    
+
                     if ($rolesCount > 0 || $usersCount > 0) {
                         return "This permission is assigned to {$rolesCount} role(s) and {$usersCount} user(s). Deleting it will remove their access. Are you sure?";
                     }
+
                     return 'Are you sure you want to delete this permission?';
                 })
                 ->modalSubmitActionLabel('Yes, delete permission'),
@@ -43,7 +44,7 @@ class EditPermission extends EditRecord
                 ->action(function (array $data) {
                     $role = \Spatie\Permission\Models\Role::find($data['role_id']);
                     $role->givePermissionTo($this->record);
-                    
+
                     Notification::make()
                         ->success()
                         ->title('Permission assigned')
@@ -59,18 +60,18 @@ class EditPermission extends EditRecord
                     \Filament\Forms\Components\TextInput::make('new_name')
                         ->label('New Permission Name')
                         ->required()
-                        ->default($this->record->name . '_copy')
+                        ->default($this->record->name.'_copy')
                         ->rules(['regex:/^[a-z0-9_]+$/']),
                 ])
                 ->action(function (array $data) {
                     $newPermission = $this->record->replicate();
                     $newPermission->name = strtolower(trim($data['new_name']));
                     $newPermission->save();
-                    
+
                     // Copy role assignments
                     $roles = $this->record->roles;
                     $newPermission->roles()->sync($roles->pluck('id'));
-                    
+
                     Notification::make()
                         ->success()
                         ->title('Permission duplicated')
@@ -93,10 +94,10 @@ class EditPermission extends EditRecord
                 ->color('warning')
                 ->action(function () {
                     $superAdminRole = \Spatie\Permission\Models\Role::where('name', 'super_admin')->first();
-                    
+
                     if ($superAdminRole) {
                         $superAdminRole->givePermissionTo($this->record);
-                        
+
                         Notification::make()
                             ->success()
                             ->title('Permission added to Super Admin')
@@ -136,9 +137,9 @@ class EditPermission extends EditRecord
         $systemPermissions = [
             'view_any_user', 'view_user', 'create_user', 'update_user', 'delete_user',
             'view_any_role', 'view_role', 'create_role', 'update_role', 'delete_role',
-            'view_any_permission', 'view_permission', 'create_permission', 'update_permission', 'delete_permission'
+            'view_any_permission', 'view_permission', 'create_permission', 'update_permission', 'delete_permission',
         ];
-        
+
         if (in_array($this->record->name, $systemPermissions)) {
             // Don't allow changing the name of system permissions
             $data['name'] = $this->record->name;
@@ -148,7 +149,7 @@ class EditPermission extends EditRecord
             $data['name'] = strtolower(trim($data['name']));
             $data['name'] = preg_replace('/[^a-z0-9_]/', '_', $data['name']);
         }
-        
+
         return $data;
     }
 
@@ -158,7 +159,7 @@ class EditPermission extends EditRecord
         activity()
             ->causedBy(auth()->user())
             ->performedOn($this->record)
-            ->log('Permission updated: ' . $this->record->name);
+            ->log('Permission updated: '.$this->record->name);
 
         // Clear cached permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
@@ -168,7 +169,7 @@ class EditPermission extends EditRecord
     {
         // Ensure super_admin role always gets new permissions
         $superAdminRole = \Spatie\Permission\Models\Role::where('name', 'super_admin')->first();
-        if ($superAdminRole && !$superAdminRole->hasPermissionTo($this->record)) {
+        if ($superAdminRole && ! $superAdminRole->hasPermissionTo($this->record)) {
             $superAdminRole->givePermissionTo($this->record);
         }
     }

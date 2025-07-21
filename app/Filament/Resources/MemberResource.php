@@ -7,12 +7,12 @@ use App\Models\Member;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Support\Enums\FontWeight;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\Filter;
 use Illuminate\Support\Facades\Hash;
 
 class MemberResource extends Resource
@@ -43,7 +43,7 @@ class MemberResource extends Resource
 
                         Forms\Components\TextInput::make('password')
                             ->password()
-                            ->dehydrateStateUsing(fn ($state) => !empty($state) ? Hash::make($state) : null)
+                            ->dehydrateStateUsing(fn ($state) => ! empty($state) ? Hash::make($state) : null)
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $context): bool => $context === 'create')
                             ->helperText('Leave blank to keep current password (when editing)'),
@@ -162,8 +162,7 @@ class MemberResource extends Resource
                     ]),
 
                 Filter::make('recently_active')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->where('last_login_at', '>=', now()->subDays(30))
+                    ->query(fn (Builder $query): Builder => $query->where('last_login_at', '>=', now()->subDays(30))
                     ),
             ])
             ->actions([

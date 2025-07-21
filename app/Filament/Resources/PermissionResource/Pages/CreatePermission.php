@@ -4,8 +4,8 @@ namespace App\Filament\Resources\PermissionResource\Pages;
 
 use App\Filament\Resources\PermissionResource;
 use Filament\Actions;
-use Filament\Resources\Pages\CreateRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\CreateRecord;
 use Spatie\Permission\Models\Permission;
 
 class CreatePermission extends CreateRecord
@@ -29,11 +29,11 @@ class CreatePermission extends CreateRecord
     {
         // Ensure guard_name is set
         $data['guard_name'] = $data['guard_name'] ?? 'web';
-        
+
         // Clean up the name
         $data['name'] = strtolower(trim($data['name']));
         $data['name'] = preg_replace('/[^a-z0-9_]/', '_', $data['name']);
-        
+
         return $data;
     }
 
@@ -43,7 +43,7 @@ class CreatePermission extends CreateRecord
         activity()
             ->causedBy(auth()->user())
             ->performedOn($this->record)
-            ->log('Permission created: ' . $this->record->name);
+            ->log('Permission created: '.$this->record->name);
 
         // Clear cached permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
@@ -62,7 +62,7 @@ class CreatePermission extends CreateRecord
                         ->required()
                         ->placeholder('e.g., stories, members, categories')
                         ->helperText('Name of the resource (singular form)'),
-                    
+
                     \Filament\Forms\Components\CheckboxList::make('permission_types')
                         ->label('Permission Types')
                         ->options([
@@ -101,29 +101,29 @@ class CreatePermission extends CreateRecord
                     $resourceName = strtolower(trim($data['resource_name']));
                     $permissionTypes = $data['permission_types'];
                     $category = $data['category'];
-                    
+
                     $created = 0;
                     $errors = [];
-                    
+
                     foreach ($permissionTypes as $type) {
                         $permissionName = "{$type}_{$resourceName}";
-                        
+
                         try {
                             $permission = Permission::firstOrCreate([
                                 'name' => $permissionName,
-                                'guard_name' => 'web'
+                                'guard_name' => 'web',
                             ], [
-                                'category' => $category
+                                'category' => $category,
                             ]);
-                            
+
                             if ($permission->wasRecentlyCreated) {
                                 $created++;
                             }
                         } catch (\Exception $e) {
-                            $errors[] = "Failed to create {$permissionName}: " . $e->getMessage();
+                            $errors[] = "Failed to create {$permissionName}: ".$e->getMessage();
                         }
                     }
-                    
+
                     if ($created > 0) {
                         Notification::make()
                             ->success()
@@ -131,15 +131,15 @@ class CreatePermission extends CreateRecord
                             ->body("Created {$created} permissions for {$resourceName}")
                             ->send();
                     }
-                    
-                    if (!empty($errors)) {
+
+                    if (! empty($errors)) {
                         Notification::make()
                             ->warning()
                             ->title('Some permissions failed')
                             ->body(implode(', ', $errors))
                             ->send();
                     }
-                    
+
                     if ($created === 0 && empty($errors)) {
                         Notification::make()
                             ->warning()
@@ -163,28 +163,28 @@ class CreatePermission extends CreateRecord
                         ['name' => 'access_admin_panel', 'category' => 'system'],
                         ['name' => 'view_dashboard', 'category' => 'system'],
                         ['name' => 'manage_settings', 'category' => 'system'],
-                        
+
                         // Analytics permissions
                         ['name' => 'view_analytics', 'category' => 'analytics'],
                         ['name' => 'export_data', 'category' => 'analytics'],
-                        
+
                         // User management
                         ['name' => 'manage_users', 'category' => 'users'],
                         ['name' => 'assign_roles', 'category' => 'users'],
                     ];
-                    
+
                     $created = 0;
                     foreach ($commonPermissions as $permissionData) {
                         $permission = Permission::firstOrCreate([
                             'name' => $permissionData['name'],
-                            'guard_name' => 'web'
+                            'guard_name' => 'web',
                         ], $permissionData);
-                        
+
                         if ($permission->wasRecentlyCreated) {
                             $created++;
                         }
                     }
-                    
+
                     if ($created > 0) {
                         Notification::make()
                             ->success()

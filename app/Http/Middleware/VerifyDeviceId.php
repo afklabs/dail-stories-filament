@@ -31,7 +31,7 @@ class VerifyDeviceId
         // Get device ID from header or request
         $deviceId = $request->header('X-Device-ID') ?? $request->input('device_id');
 
-        if (!$deviceId) {
+        if (! $deviceId) {
             return response()->json([
                 'success' => false,
                 'message' => 'Device ID required',
@@ -40,7 +40,7 @@ class VerifyDeviceId
         }
 
         // Validate device ID format (customize based on your requirements)
-        if (!$this->isValidDeviceId($deviceId)) {
+        if (! $this->isValidDeviceId($deviceId)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid device ID format',
@@ -51,7 +51,7 @@ class VerifyDeviceId
         // If user is authenticated, verify device ID matches
         if ($request->user() && $request->user() instanceof \App\Models\Member) {
             $member = $request->user();
-            
+
             // Allow if device ID matches or if member doesn't have device ID set
             if ($member->device_id && $member->device_id !== $deviceId) {
                 return response()->json([

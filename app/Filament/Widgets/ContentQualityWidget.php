@@ -2,16 +2,20 @@
 
 namespace App\Filament\Widgets;
 
-use Filament\Widgets\ChartWidget;
 use App\Models\StoryRatingAggregate;
+use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Facades\Cache;
 
 class ContentQualityWidget extends ChartWidget
 {
     protected static ?string $heading = 'Content Quality Distribution';
+
     protected static string $color = 'warning';
+
     protected static ?string $pollingInterval = '600s';
+
     protected static bool $isLazy = true;
+
     protected static ?int $sort = 3;
 
     protected function getData(): array
@@ -85,7 +89,7 @@ class ContentQualityWidget extends ChartWidget
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
                             return label + ": " + value + " stories (" + percentage + "%)";
-                        }'
+                        }',
                     ],
                 ],
             ],

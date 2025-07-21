@@ -40,28 +40,41 @@ class StoryRatingAggregate extends Model
      * Rating system constants
      */
     private const MIN_RATING = 1;
+
     private const MAX_RATING = 5;
+
     private const VALID_RATINGS = [1, 2, 3, 4, 5];
+
     private const HIGH_RATING_THRESHOLD = 4;
+
     private const LOW_RATING_THRESHOLD = 2;
+
     private const EXCELLENT_RATING = 5;
+
     private const GOOD_RATING = 4;
+
     private const AVERAGE_RATING = 3;
+
     private const POOR_RATING = 2;
+
     private const TERRIBLE_RATING = 1;
 
     /**
      * Cache constants
      */
     private const CACHE_TTL = 600; // 10 minutes
+
     private const CACHE_TTL_ANALYTICS = 1800; // 30 minutes
+
     private const CACHE_TTL_TRENDS = 3600; // 1 hour
 
     /**
      * Quality thresholds
      */
     private const MIN_RATINGS_FOR_RELIABILITY = 5;
+
     private const HIGH_QUALITY_THRESHOLD = 4.0;
+
     private const RECOMMENDATION_THRESHOLD = 4;
 
     /**
@@ -161,8 +174,8 @@ class StoryRatingAggregate extends Model
         $halfStar = ($this->average_rating - $fullStars) >= 0.5 ? 1 : 0;
         $emptyStars = 5 - $fullStars - $halfStar;
 
-        return str_repeat('⭐', (int) $fullStars) .
-            str_repeat('✨', $halfStar) .
+        return str_repeat('⭐', (int) $fullStars).
+            str_repeat('✨', $halfStar).
             str_repeat('☆', $emptyStars);
     }
 
@@ -213,6 +226,7 @@ class StoryRatingAggregate extends Model
         }
 
         $recommendableRatings = ($this->rating_distribution[4] ?? 0) + ($this->rating_distribution[5] ?? 0);
+
         return round(($recommendableRatings / $this->total_ratings) * 100, 1);
     }
 
@@ -360,7 +374,7 @@ class StoryRatingAggregate extends Model
 
             // Enhanced metrics
             $verifiedRatings = $ratings->where('is_verified', true);
-            $ratingsWithComments = $ratings->filter(fn($r) => !empty(trim($r->comment ?? '')));
+            $ratingsWithComments = $ratings->filter(fn ($r) => ! empty(trim($r->comment ?? '')));
 
             self::updateOrCreate(
                 ['story_id' => $storyId],
@@ -370,8 +384,8 @@ class StoryRatingAggregate extends Model
                     'average_rating' => $averageRating,
                     'rating_distribution' => $distribution,
                     'verified_ratings_count' => $verifiedRatings->count(),
-                    'verified_average_rating' => $verifiedRatings->count() > 0 
-                        ? round($verifiedRatings->avg('rating'), 2) 
+                    'verified_average_rating' => $verifiedRatings->count() > 0
+                        ? round($verifiedRatings->avg('rating'), 2)
                         : null,
                     'comments_count' => $ratingsWithComments->count(),
                     'last_rated_at' => $ratings->max('created_at'),
@@ -397,7 +411,7 @@ class StoryRatingAggregate extends Model
         return Cache::remember("story_rating_analytics_{$storyId}", self::CACHE_TTL_ANALYTICS, function () use ($storyId): array {
             $aggregate = self::where('story_id', $storyId)->first();
 
-            if (!$aggregate) {
+            if (! $aggregate) {
                 return self::getDefaultAnalytics();
             }
 
@@ -424,11 +438,11 @@ class StoryRatingAggregate extends Model
                 'sentiment_analysis' => [
                     'sentiment' => $aggregate->sentiment,
                     'rating_level' => $aggregate->rating_level,
-                    'positive_percentage' => ($aggregate->rating_distribution[4] ?? 0) + ($aggregate->rating_distribution[5] ?? 0) > 0 
-                        ? round(((($aggregate->rating_distribution[4] ?? 0) + ($aggregate->rating_distribution[5] ?? 0)) / $aggregate->total_ratings) * 100, 1) 
+                    'positive_percentage' => ($aggregate->rating_distribution[4] ?? 0) + ($aggregate->rating_distribution[5] ?? 0) > 0
+                        ? round(((($aggregate->rating_distribution[4] ?? 0) + ($aggregate->rating_distribution[5] ?? 0)) / $aggregate->total_ratings) * 100, 1)
                         : 0,
-                    'negative_percentage' => ($aggregate->rating_distribution[1] ?? 0) + ($aggregate->rating_distribution[2] ?? 0) > 0 
-                        ? round(((($aggregate->rating_distribution[1] ?? 0) + ($aggregate->rating_distribution[2] ?? 0)) / $aggregate->total_ratings) * 100, 1) 
+                    'negative_percentage' => ($aggregate->rating_distribution[1] ?? 0) + ($aggregate->rating_distribution[2] ?? 0) > 0
+                        ? round(((($aggregate->rating_distribution[1] ?? 0) + ($aggregate->rating_distribution[2] ?? 0)) / $aggregate->total_ratings) * 100, 1)
                         : 0,
                 ],
                 'recent_activity' => [
@@ -492,7 +506,7 @@ class StoryRatingAggregate extends Model
                 ->where('created_at', '>=', Carbon::now()->subDays($days))
                 ->orderBy('created_at')
                 ->get()
-                ->groupBy(fn($rating) => $rating->created_at->format('Y-m-d'));
+                ->groupBy(fn ($rating) => $rating->created_at->format('Y-m-d'));
 
             $trends = [];
             foreach ($ratings as $date => $dayRatings) {
@@ -517,7 +531,7 @@ class StoryRatingAggregate extends Model
             $totalStories = self::count();
             $totalRatings = self::sum('total_ratings');
             $averageGlobalRating = self::avg('average_rating');
-            
+
             return [
                 'total_stories_rated' => $totalStories,
                 'total_ratings_given' => $totalRatings,
@@ -621,10 +635,10 @@ class StoryRatingAggregate extends Model
             "story_rating_analytics_{$storyId}",
             "story_rating_trends_{$storyId}_30",
             "story_rating_trends_{$storyId}_7",
-            "top_rated_stories_10",
-            "most_rated_stories_10",
-            "trending_stories_7_10",
-            "global_rating_stats",
+            'top_rated_stories_10',
+            'most_rated_stories_10',
+            'trending_stories_7_10',
+            'global_rating_stats',
         ];
 
         foreach ($patterns as $pattern) {
@@ -638,6 +652,7 @@ class StoryRatingAggregate extends Model
     public function getFilamentName(): string
     {
         $storyTitle = $this->story?->title ?? 'Unknown Story';
+
         return "{$storyTitle} ({$this->average_rating} ⭐ - {$this->total_ratings} ratings)";
     }
 

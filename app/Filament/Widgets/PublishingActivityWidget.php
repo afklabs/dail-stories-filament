@@ -2,16 +2,20 @@
 
 namespace App\Filament\Widgets;
 
-use Filament\Widgets\ChartWidget;
 use App\Models\StoryPublishingHistory;
+use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Facades\Cache;
 
 class PublishingActivityWidget extends ChartWidget
 {
     protected static ?string $heading = 'Publishing Activity (Last 14 Days)';
+
     protected static string $color = 'success';
+
     protected static ?string $pollingInterval = '300s';
+
     protected static bool $isLazy = true;
+
     protected static ?int $sort = 5;
 
     protected function getData(): array
@@ -20,13 +24,13 @@ class PublishingActivityWidget extends ChartWidget
             return Cache::remember('publishing_activity_chart', 300, function () {
                 $data = collect(range(13, 0))->map(function ($daysBack) {
                     $date = now()->subDays($daysBack);
-                    
+
                     $activities = StoryPublishingHistory::whereDate('created_at', $date->toDateString())
                         ->selectRaw('action, COUNT(*) as count')
                         ->groupBy('action')
                         ->get()
                         ->pluck('count', 'action');
-                    
+
                     return [
                         'date' => $date->format('M j'),
                         'published' => $activities['published'] ?? 0,
@@ -82,7 +86,7 @@ class PublishingActivityWidget extends ChartWidget
                         'borderColor' => 'rgb(239, 68, 68)',
                     ],
                 ],
-                'labels' => collect(range(13, 0))->map(fn($d) => now()->subDays($d)->format('M j'))->toArray(),
+                'labels' => collect(range(13, 0))->map(fn ($d) => now()->subDays($d)->format('M j'))->toArray(),
             ];
         }
     }

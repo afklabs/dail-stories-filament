@@ -13,8 +13,7 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('story_tags', function (Blueprint $table)
-        {
+        Schema::create('story_tags', function (Blueprint $table) {
             $table->id();
             $table->foreignId('story_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tag_id')->constrained()->cascadeOnDelete();

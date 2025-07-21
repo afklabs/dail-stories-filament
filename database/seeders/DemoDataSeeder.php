@@ -2,16 +2,13 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Story;
-use App\Models\Category;
-use App\Models\Tag;
 use App\Models\Member;
 use App\Models\MemberReadingHistory;
+use App\Models\Story;
 use App\Models\StoryPublishingHistory;
 use App\Models\User;
-use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class DemoDataSeeder extends Seeder
 {
@@ -37,12 +34,10 @@ class DemoDataSeeder extends Seeder
         $stories = Story::where('active', true)->get();
         $members = Member::where('status', 'active')->get();
 
-        foreach ($members->random(min(20, $members->count())) as $member)
-        {
+        foreach ($members->random(min(20, $members->count())) as $member) {
             $readStories = $stories->random(rand(5, 15));
 
-            foreach ($readStories as $story)
-            {
+            foreach ($readStories as $story) {
                 MemberReadingHistory::create([
                     'member_id' => $member->id,
                     'story_id' => $story->id,
@@ -61,13 +56,11 @@ class DemoDataSeeder extends Seeder
         $this->command->info('📅 Seeding Publishing History...');
 
         $stories = Story::all();
-        $admins = User::whereHas('roles', function ($q)
-        {
+        $admins = User::whereHas('roles', function ($q) {
             $q->whereIn('name', ['admin', 'super-admin', 'editor']);
         })->get();
 
-        foreach ($stories->random(min(10, $stories->count())) as $story)
-        {
+        foreach ($stories->random(min(10, $stories->count())) as $story) {
             StoryPublishingHistory::create([
                 'story_id' => $story->id,
                 'user_id' => $admins->random()->id,

@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\DB;
 class ReadingInsightsWidget extends ChartWidget
 {
     protected static string $color = 'success';
+
     protected static ?string $pollingInterval = '300s';
+
     protected static bool $isLazy = true;
 
     public function getHeading(): string
@@ -20,7 +22,7 @@ class ReadingInsightsWidget extends ChartWidget
     protected function getData(): array
     {
         try {
-            $completionData = cache()->remember('dashboard.reading_insights', 300, function() {
+            $completionData = cache()->remember('dashboard.reading_insights', 300, function () {
                 return MemberReadingHistory::select(
                     DB::raw('CASE 
                         WHEN reading_progress = 0 THEN "Not Started"
@@ -32,18 +34,18 @@ class ReadingInsightsWidget extends ChartWidget
                         END as completion_stage'),
                     DB::raw('COUNT(*) as count')
                 )
-                ->groupBy('completion_stage')
-                ->pluck('count', 'completion_stage')
-                ->toArray();
+                    ->groupBy('completion_stage')
+                    ->pluck('count', 'completion_stage')
+                    ->toArray();
             });
 
             $stages = [
-                'Not Started', 
-                'Started (0-25%)', 
-                'Progress (25-50%)', 
-                'Halfway (50-75%)', 
-                'Almost Done (75-99%)', 
-                'Completed'
+                'Not Started',
+                'Started (0-25%)',
+                'Progress (25-50%)',
+                'Halfway (50-75%)',
+                'Almost Done (75-99%)',
+                'Completed',
             ];
 
             $data = [];
@@ -53,7 +55,7 @@ class ReadingInsightsWidget extends ChartWidget
                 '#eab308', // Yellow
                 '#84cc16', // Lime
                 '#22c55e', // Green
-                '#10b981'  // Emerald
+                '#10b981',  // Emerald
             ];
 
             foreach ($stages as $stage) {
@@ -74,7 +76,7 @@ class ReadingInsightsWidget extends ChartWidget
             ];
         } catch (\Exception $e) {
             \Log::error('Dashboard ReadingInsights widget error', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
@@ -117,7 +119,7 @@ class ReadingInsightsWidget extends ChartWidget
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
                             return label + ": " + value + " (" + percentage + "%)";
-                        }'
+                        }',
                     ],
                 ],
             ],

@@ -6,7 +6,6 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,21 +39,27 @@ class StoryView extends Model
      * Cache constants
      */
     private const CACHE_TTL = 300; // 5 minutes
+
     private const CACHE_TTL_ANALYTICS = 900; // 15 minutes
+
     private const CACHE_TTL_TRENDS = 1800; // 30 minutes
 
     /**
      * View type constants
      */
     private const VIEW_TYPE_MEMBER = 'member';
+
     private const VIEW_TYPE_GUEST = 'guest';
+
     private const VIEW_TYPE_ANONYMOUS = 'anonymous';
 
     /**
      * Analytics constants
      */
     private const RECENT_DAYS = 7;
+
     private const TRENDING_THRESHOLD = 10;
+
     private const POPULAR_THRESHOLD = 50;
 
     /**
@@ -95,7 +100,7 @@ class StoryView extends Model
 
         // Auto-fill viewed_at if not provided
         static::creating(function (self $view): void {
-            if (!$view->viewed_at) {
+            if (! $view->viewed_at) {
                 $view->viewed_at = Carbon::now();
             }
         });
@@ -176,7 +181,7 @@ class StoryView extends Model
         }
 
         if ($this->device_id) {
-            return 'Guest (' . substr($this->device_id, 0, 8) . ')';
+            return 'Guest ('.substr($this->device_id, 0, 8).')';
         }
 
         return 'Anonymous Viewer';
@@ -187,7 +192,7 @@ class StoryView extends Model
      */
     public function getBrowserInfoAttribute(): array
     {
-        if (!$this->user_agent) {
+        if (! $this->user_agent) {
             return ['browser' => 'Unknown', 'platform' => 'Unknown'];
         }
 
@@ -227,7 +232,7 @@ class StoryView extends Model
      */
     public function getIsMobileAttribute(): bool
     {
-        if (!$this->user_agent) {
+        if (! $this->user_agent) {
             return false;
         }
 
@@ -367,7 +372,7 @@ class StoryView extends Model
     {
         return Cache::remember("view_analytics_{$days}", self::CACHE_TTL_ANALYTICS, function () use ($days): array {
             $startDate = Carbon::now()->subDays($days);
-            
+
             return [
                 'overview' => self::getOverviewStats($startDate),
                 'audience' => self::getAudienceStats($startDate),
@@ -432,14 +437,14 @@ class StoryView extends Model
     private static function getDailyTrends(int $days): array
     {
         $trends = [];
-        
+
         for ($i = $days - 1; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
             $totalViews = self::whereDate('viewed_at', $date)->count();
             $uniqueViews = self::whereDate('viewed_at', $date)
                 ->select(DB::raw('COUNT(DISTINCT COALESCE(member_id, device_id)) as count'))
                 ->value('count') ?? 0;
-            
+
             $trends[] = [
                 'date' => $date->format('Y-m-d'),
                 'formatted_date' => $date->format('M j'),
@@ -449,7 +454,7 @@ class StoryView extends Model
                 'guest_views' => self::whereDate('viewed_at', $date)->guests()->count(),
             ];
         }
-        
+
         return $trends;
     }
 
@@ -604,7 +609,7 @@ class StoryView extends Model
         foreach ($views as $view) {
             $browserInfo = $view->browser_info;
             $browser = $browserInfo['browser'];
-            
+
             if (array_key_exists($browser, $browsers)) {
                 $browsers[$browser]++;
             } else {
@@ -626,7 +631,7 @@ class StoryView extends Model
         foreach ($views as $view) {
             $browserInfo = $view->browser_info;
             $platform = $browserInfo['platform'];
-            
+
             if (array_key_exists($platform, $platforms)) {
                 $platforms[$platform]++;
             } else {
@@ -660,20 +665,20 @@ class StoryView extends Model
     private static function getStoryViewTimeline(int $storyId, int $days = 14): array
     {
         $timeline = [];
-        
+
         for ($i = $days - 1; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
             $count = self::where('story_id', $storyId)
                 ->whereDate('viewed_at', $date)
                 ->count();
-            
+
             $timeline[] = [
                 'date' => $date->format('Y-m-d'),
                 'formatted_date' => $date->format('M j'),
                 'views' => $count,
             ];
         }
-        
+
         return $timeline;
     }
 
@@ -683,7 +688,7 @@ class StoryView extends Model
     private static function calculateStoryEngagementRate(int $storyId): float
     {
         $totalViews = self::where('story_id', $storyId)->count();
-        
+
         if ($totalViews === 0) {
             return 0;
         }
@@ -739,6 +744,7 @@ class StoryView extends Model
     public function getFilamentName(): string
     {
         $storyTitle = $this->story?->title ?? 'Unknown Story';
+
         return "{$storyTitle} - {$this->viewer_name} ({$this->time_ago})";
     }
 }

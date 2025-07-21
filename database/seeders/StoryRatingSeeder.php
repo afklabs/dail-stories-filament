@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Story;
 use App\Models\Member;
 use App\Models\MemberStoryRating;
+use App\Models\Story;
 use App\Models\StoryRatingAggregate;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 
 class StoryRatingSeeder extends Seeder
 {
@@ -18,8 +18,7 @@ class StoryRatingSeeder extends Seeder
         $stories = Story::where('active', true)->get();
         $members = Member::where('status', 'active')->get();
 
-        if ($members->isEmpty() || $stories->isEmpty())
-        {
+        if ($members->isEmpty() || $stories->isEmpty()) {
             return;
         }
 
@@ -54,13 +53,11 @@ class StoryRatingSeeder extends Seeder
             ],
         ];
 
-        foreach ($stories as $story)
-        {
+        foreach ($stories as $story) {
             // 20-60% of viewers rate the story
             $viewers = $members->random(rand(intval($members->count() * 0.2), intval($members->count() * 0.6)));
 
-            foreach ($viewers as $member)
-            {
+            foreach ($viewers as $member) {
                 // Generate weighted random rating (more 4s and 5s)
                 $weights = [1 => 5, 2 => 10, 3 => 20, 4 => 35, 5 => 30];
                 $rating = $this->getWeightedRandom($weights);
@@ -87,11 +84,9 @@ class StoryRatingSeeder extends Seeder
     {
         $rand = rand(1, array_sum($weights));
 
-        foreach ($weights as $value => $weight)
-        {
+        foreach ($weights as $value => $weight) {
             $rand -= $weight;
-            if ($rand <= 0)
-            {
+            if ($rand <= 0) {
                 return $value;
             }
         }
@@ -103,8 +98,7 @@ class StoryRatingSeeder extends Seeder
     {
         $ratings = MemberStoryRating::where('story_id', $storyId)->get();
 
-        if ($ratings->isEmpty())
-        {
+        if ($ratings->isEmpty()) {
             return;
         }
 
@@ -114,8 +108,7 @@ class StoryRatingSeeder extends Seeder
 
         // Calculate distribution
         $distribution = [];
-        for ($i = 1; $i <= 5; $i++)
-        {
+        for ($i = 1; $i <= 5; $i++) {
             $distribution[$i] = $ratings->where('rating', $i)->count();
         }
 

@@ -25,8 +25,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Optional: Run demo data seeder for development
-        if (app()->environment('local', 'development'))
-        {
+        if (app()->environment('local', 'development')) {
             $this->call(DemoDataSeeder::class);
         }
     }

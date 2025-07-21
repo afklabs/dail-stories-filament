@@ -13,8 +13,7 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('story_publishing_history', function (Blueprint $table)
-        {
+        Schema::create('story_publishing_history', function (Blueprint $table) {
             $table->id();
             $table->foreignId('story_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
@@ -26,7 +25,7 @@ return new class extends Migration
                 'republished',    // Republished
                 'updated',        // Publishing data updated
                 'scheduled',      // Scheduled for publishing
-                'expired'         // Publishing expired
+                'expired',         // Publishing expired
             ]);
 
             // Previous and new state

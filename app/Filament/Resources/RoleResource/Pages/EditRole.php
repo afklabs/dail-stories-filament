@@ -4,8 +4,8 @@ namespace App\Filament\Resources\RoleResource\Pages;
 
 use App\Filament\Resources\RoleResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\EditRecord;
 
 class EditRole extends EditRecord
 {
@@ -23,23 +23,24 @@ class EditRole extends EditRecord
                     if ($usersCount > 0) {
                         return "This role is assigned to {$usersCount} user(s). Deleting it will remove their permissions. Are you sure?";
                     }
+
                     return 'Are you sure you want to delete this role?';
                 })
                 ->modalSubmitActionLabel('Yes, delete role'),
-            
+
             Actions\Action::make('duplicate')
                 ->label('Duplicate Role')
                 ->icon('heroicon-o-document-duplicate')
                 ->color('gray')
                 ->action(function () {
                     $newRole = $this->record->replicate();
-                    $newRole->name = $this->record->name . '_copy';
+                    $newRole->name = $this->record->name.'_copy';
                     $newRole->save();
-                    
+
                     // Copy permissions
                     $permissions = $this->record->permissions;
                     $newRole->permissions()->sync($permissions->pluck('id'));
-                    
+
                     Notification::make()
                         ->success()
                         ->title('Role duplicated')
@@ -61,7 +62,7 @@ class EditRole extends EditRecord
                 ->icon('heroicon-o-users')
                 ->color('info')
                 ->url(fn () => route('filament.admin.resources.users.index', [
-                    'tableFilters[roles][values][0]' => $this->record->id
+                    'tableFilters[roles][values][0]' => $this->record->id,
                 ]))
                 ->openUrlInNewTab(),
         ];
@@ -91,7 +92,7 @@ class EditRole extends EditRecord
             $data['name'] = strtolower(trim($data['name']));
             $data['name'] = preg_replace('/[^a-z0-9_]/', '_', $data['name']);
         }
-        
+
         return $data;
     }
 
@@ -101,7 +102,7 @@ class EditRole extends EditRecord
         activity()
             ->causedBy(auth()->user())
             ->performedOn($this->record)
-            ->log('Role updated: ' . $this->record->name);
+            ->log('Role updated: '.$this->record->name);
 
         // Clear cached permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();

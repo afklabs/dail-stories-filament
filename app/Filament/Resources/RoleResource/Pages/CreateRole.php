@@ -4,8 +4,8 @@ namespace App\Filament\Resources\RoleResource\Pages;
 
 use App\Filament\Resources\RoleResource;
 use Filament\Actions;
-use Filament\Resources\Pages\CreateRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\CreateRecord;
 
 class CreateRole extends CreateRecord
 {
@@ -28,11 +28,11 @@ class CreateRole extends CreateRecord
     {
         // Ensure guard_name is set
         $data['guard_name'] = $data['guard_name'] ?? 'web';
-        
+
         // Clean up the name
         $data['name'] = strtolower(trim($data['name']));
         $data['name'] = preg_replace('/[^a-z0-9_]/', '_', $data['name']);
-        
+
         return $data;
     }
 
@@ -42,7 +42,7 @@ class CreateRole extends CreateRecord
         activity()
             ->causedBy(auth()->user())
             ->performedOn($this->record)
-            ->log('Role created: ' . $this->record->name);
+            ->log('Role created: '.$this->record->name);
     }
 
     protected function getHeaderActions(): array
@@ -57,28 +57,28 @@ class CreateRole extends CreateRecord
                         [
                             'name' => 'content_manager',
                             'guard_name' => 'web',
-                            'description' => 'Can manage stories, categories, and tags'
+                            'description' => 'Can manage stories, categories, and tags',
                         ],
                         [
-                            'name' => 'member_moderator', 
+                            'name' => 'member_moderator',
                             'guard_name' => 'web',
-                            'description' => 'Can moderate members and their interactions'
+                            'description' => 'Can moderate members and their interactions',
                         ],
                         [
                             'name' => 'analytics_viewer',
-                            'guard_name' => 'web', 
-                            'description' => 'Can view analytics and reports'
+                            'guard_name' => 'web',
+                            'description' => 'Can view analytics and reports',
                         ],
                         [
                             'name' => 'editor',
                             'guard_name' => 'web',
-                            'description' => 'Can edit content but not publish'
-                        ]
+                            'description' => 'Can edit content but not publish',
+                        ],
                     ];
 
                     $created = 0;
                     foreach ($presetRoles as $roleData) {
-                        if (!\Spatie\Permission\Models\Role::where('name', $roleData['name'])->exists()) {
+                        if (! \Spatie\Permission\Models\Role::where('name', $roleData['name'])->exists()) {
                             \Spatie\Permission\Models\Role::create($roleData);
                             $created++;
                         }

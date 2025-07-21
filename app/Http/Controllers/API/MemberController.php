@@ -6,11 +6,17 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MemberProfileUpdateRequest;
-use App\Models\{Member, Story, MemberStoryRating, MemberStoryInteraction, MemberReadingHistory};
-use Illuminate\Http\{JsonResponse, Request};
-use Illuminate\Support\Facades\{Hash, DB, Log, Validator};
-use Illuminate\Validation\ValidationException;
-use Carbon\Carbon;
+use App\Models\Member;
+use App\Models\MemberReadingHistory;
+use App\Models\MemberStoryInteraction;
+use App\Models\MemberStoryRating;
+use App\Models\Story;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class MemberController extends Controller
 {
@@ -40,7 +46,7 @@ class MemberController extends Controller
 
             $validated = $validator->validated();
 
-            DB::transaction(function () use ($validated, $request, &$member, &$token) {
+            DB::transaction(function () use ($validated, &$member, &$token) {
                 $member = Member::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
@@ -75,7 +81,7 @@ class MemberController extends Controller
             ], 201);
         } catch (\Exception $e) {
             Log::error('Member registration error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Registration failed',
@@ -108,7 +114,7 @@ class MemberController extends Controller
 
             $member = Member::where('email', $validated['email'])->first();
 
-            if (!$member || !Hash::check($validated['password'], $member->password)) {
+            if (! $member || ! Hash::check($validated['password'], $member->password)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid credentials',
@@ -152,7 +158,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Member login error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Login failed',
@@ -167,14 +173,14 @@ class MemberController extends Controller
     {
         try {
             $request->user()->currentAccessToken()->delete();
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Logout successful',
             ]);
         } catch (\Exception $e) {
             Log::error('Member logout error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Logout failed',
@@ -189,7 +195,7 @@ class MemberController extends Controller
     {
         try {
             $member = $request->user();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -207,7 +213,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get member profile error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load profile',
@@ -225,8 +231,8 @@ class MemberController extends Controller
             $validated = $request->validated();
 
             // Handle password update if provided
-            if (!empty($validated['new_password'])) {
-                if (!Hash::check($validated['current_password'], $member->password)) {
+            if (! empty($validated['new_password'])) {
+                if (! Hash::check($validated['current_password'], $member->password)) {
                     return response()->json([
                         'success' => false,
                         'message' => 'Current password is incorrect',
@@ -261,7 +267,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Update member profile error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update profile',
@@ -280,13 +286,13 @@ class MemberController extends Controller
 
             $bookmarks = Story::whereHas('interactions', function ($query) use ($member) {
                 $query->where('member_id', $member->id)
-                      ->where('action', 'bookmark');
+                    ->where('action', 'bookmark');
             })
-            ->where('active', true)
-            ->with(['category:id,name', 'ratingAggregate'])
-            ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
-            ->orderByDesc('created_at')
-            ->paginate($perPage);
+                ->where('active', true)
+                ->with(['category:id,name', 'ratingAggregate'])
+                ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
+                ->orderByDesc('created_at')
+                ->paginate($perPage);
 
             return response()->json([
                 'success' => true,
@@ -301,7 +307,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get member bookmarks error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load bookmarks',
@@ -321,16 +327,16 @@ class MemberController extends Controller
             $ratedStories = Story::whereHas('ratings', function ($query) use ($member) {
                 $query->where('member_id', $member->id);
             })
-            ->with([
-                'category:id,name',
-                'ratingAggregate',
-                'ratings' => function ($query) use ($member) {
-                    $query->where('member_id', $member->id);
-                }
-            ])
-            ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
-            ->orderByDesc('created_at')
-            ->paginate($perPage);
+                ->with([
+                    'category:id,name',
+                    'ratingAggregate',
+                    'ratings' => function ($query) use ($member) {
+                        $query->where('member_id', $member->id);
+                    },
+                ])
+                ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
+                ->orderByDesc('created_at')
+                ->paginate($perPage);
 
             // Add member rating to each story
             $ratedStories->getCollection()->transform(function ($story) {
@@ -341,6 +347,7 @@ class MemberController extends Controller
                     'created_at' => $memberRating->created_at,
                 ];
                 unset($story->ratings); // Remove the relationship to clean response
+
                 return $story;
             });
 
@@ -357,7 +364,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get member rated stories error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load rated stories',
@@ -377,7 +384,7 @@ class MemberController extends Controller
             $readingHistory = MemberReadingHistory::where('member_id', $member->id)
                 ->with([
                     'story:id,title,excerpt,image,category_id,reading_time_minutes',
-                    'story.category:id,name'
+                    'story.category:id,name',
                 ])
                 ->orderByDesc('last_read_at')
                 ->paginate($perPage);
@@ -415,7 +422,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get member reading history error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load reading history',
@@ -446,7 +453,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get member recommendations error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load recommendations',
@@ -501,7 +508,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Get member stats error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load statistics',
@@ -535,7 +542,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Forgot password error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to process password reset request',
@@ -571,7 +578,7 @@ class MemberController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Reset password error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to reset password',
@@ -612,7 +619,7 @@ class MemberController extends Controller
 
         $recommendations = Story::where('active', true)
             ->whereNotIn('id', $readStoryIds)
-            ->when(!empty($favoriteCategories), function ($query) use ($favoriteCategories) {
+            ->when(! empty($favoriteCategories), function ($query) use ($favoriteCategories) {
                 $query->whereIn('category_id', $favoriteCategories);
             })
             ->with(['category:id,name', 'ratingAggregate'])

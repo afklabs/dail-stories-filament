@@ -6,17 +6,15 @@ use App\Filament\Resources\CategoryResource\Pages;
 use App\Models\Category;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
-use Filament\Tables\Filters\Filter;
+use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class CategoryResource extends Resource
@@ -120,6 +118,7 @@ class CategoryResource extends Resource
                     ->limit(50)
                     ->tooltip(function (TextColumn $column): ?string {
                         $state = $column->getState();
+
                         return strlen($state) > 50 ? $state : null;
                     }),
 
@@ -134,7 +133,7 @@ class CategoryResource extends Resource
                 Tables\Columns\TextColumn::make('active_stories_count')
                     ->label('Active')
                     ->counts([
-                        'stories' => fn (Builder $query) => $query->where('active', true)
+                        'stories' => fn (Builder $query) => $query->where('active', true),
                     ])
                     ->sortable()
                     ->alignCenter()
@@ -163,23 +162,20 @@ class CategoryResource extends Resource
             ->filters([
                 Filter::make('has_stories')
                     ->label('Has Stories')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('stories')
+                    ->query(fn (Builder $query): Builder => $query->whereHas('stories')
                     ),
 
                 Filter::make('has_active_stories')
                     ->label('Has Active Stories')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('stories', function (Builder $query) {
-                            $query->where('active', true);
-                        })
+                    ->query(fn (Builder $query): Builder => $query->whereHas('stories', function (Builder $query) {
+                        $query->where('active', true);
+                    })
                     ),
 
                 Filter::make('popular')
                     ->label('Popular (5+ Stories)')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->withCount('stories')
-                              ->having('stories_count', '>=', 5)
+                    ->query(fn (Builder $query): Builder => $query->withCount('stories')
+                        ->having('stories_count', '>=', 5)
                     ),
             ])
             ->actions([
@@ -192,6 +188,7 @@ class CategoryResource extends Resource
                         if ($storiesCount > 0) {
                             return "This category has {$storiesCount} stories. Deleting it will also delete all associated stories. Are you sure?";
                         }
+
                         return 'Are you sure you want to delete this category?';
                     }),
             ])
@@ -253,7 +250,8 @@ class CategoryResource extends Resource
                                     ->label('Avg Reading Time')
                                     ->getStateUsing(function ($record) {
                                         $avg = $record->stories()->avg('reading_time_minutes');
-                                        return $avg ? round($avg, 1) . ' min' : 'N/A';
+
+                                        return $avg ? round($avg, 1).' min' : 'N/A';
                                     })
                                     ->badge()
                                     ->color('info'),
@@ -285,8 +283,7 @@ class CategoryResource extends Resource
                                             ->weight(FontWeight::Medium),
                                         Infolists\Components\TextEntry::make('status')
                                             ->badge()
-                                            ->color(fn (string $state): string => 
-                                                $state === 'Published' ? 'success' : 'gray'
+                                            ->color(fn (string $state): string => $state === 'Published' ? 'success' : 'gray'
                                             ),
                                         Infolists\Components\TextEntry::make('views'),
                                         Infolists\Components\TextEntry::make('created_at'),

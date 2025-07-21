@@ -1,4 +1,5 @@
 <?php
+
 // app/Filament/Resources/MemberResource/Pages/ViewMember.php
 
 namespace App\Filament\Resources\MemberResource\Pages;

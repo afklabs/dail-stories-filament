@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
-use Carbon\Carbon;
 
 class MemberStoryRating extends Model
 {
@@ -15,12 +14,16 @@ class MemberStoryRating extends Model
 
     // ✅ IMPROVED: Rating system constants for validation
     public const MIN_RATING = 1;
+
     public const MAX_RATING = 5;
+
     public const VALID_RATINGS = [1, 2, 3, 4, 5];
 
     // ✅ IMPROVED: Rating classification constants
     public const HIGH_RATING_THRESHOLD = 4;
+
     public const LOW_RATING_THRESHOLD = 2;
+
     public const NEUTRAL_RATING = 3;
 
     protected $fillable = [
@@ -156,7 +159,8 @@ class MemberStoryRating extends Model
             get: function () {
                 $filled = str_repeat('⭐', $this->rating);
                 $empty = str_repeat('☆', self::MAX_RATING - $this->rating);
-                return $filled . $empty;
+
+                return $filled.$empty;
             }
         );
     }
@@ -166,7 +170,7 @@ class MemberStoryRating extends Model
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: fn () => match ($this->rating) {
                 5 => 'success',
-                4 => 'info', 
+                4 => 'info',
                 3 => 'warning',
                 2 => 'orange',
                 1 => 'danger',
@@ -178,7 +182,7 @@ class MemberStoryRating extends Model
     protected function hasComment(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => !empty(trim($this->comment))
+            get: fn () => ! empty(trim($this->comment))
         );
     }
 
@@ -247,7 +251,7 @@ class MemberStoryRating extends Model
 
             // ✅ IMPROVED: Additional aggregate metrics
             $verifiedRatings = $ratings->where('is_verified', true);
-            $ratingsWithComments = $ratings->filter(fn($r) => !empty(trim($r->comment)));
+            $ratingsWithComments = $ratings->filter(fn ($r) => ! empty(trim($r->comment)));
 
             \App\Models\StoryRatingAggregate::updateOrCreate(
                 ['story_id' => $storyId],
@@ -257,8 +261,8 @@ class MemberStoryRating extends Model
                     'average_rating' => $averageRating,
                     'rating_distribution' => $distribution,
                     'verified_ratings_count' => $verifiedRatings->count(),
-                    'verified_average_rating' => $verifiedRatings->count() > 0 
-                        ? round($verifiedRatings->avg('rating'), 2) 
+                    'verified_average_rating' => $verifiedRatings->count() > 0
+                        ? round($verifiedRatings->avg('rating'), 2)
                         : 0,
                     'comments_count' => $ratingsWithComments->count(),
                     'last_rated_at' => $ratings->max('created_at'),
@@ -272,7 +276,7 @@ class MemberStoryRating extends Model
         } catch (\Exception $e) {
             \Log::error('Failed to update story rating aggregate', [
                 'story_id' => $storyId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -282,7 +286,7 @@ class MemberStoryRating extends Model
         return cache()->remember("story_rating_stats_{$storyId}", 600, function () use ($storyId) {
             $aggregate = \App\Models\StoryRatingAggregate::where('story_id', $storyId)->first();
 
-            if (!$aggregate) {
+            if (! $aggregate) {
                 return [
                     'average_rating' => 0,
                     'total_ratings' => 0,
@@ -442,8 +446,9 @@ class MemberStoryRating extends Model
         } catch (\Exception $e) {
             \Log::error('Failed to mark rating as helpful', [
                 'rating_id' => $this->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -455,12 +460,14 @@ class MemberStoryRating extends Model
             if ($result) {
                 self::updateStoryAggregate($this->story_id);
             }
+
             return $result;
         } catch (\Exception $e) {
             \Log::error('Failed to verify rating', [
                 'rating_id' => $this->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -468,7 +475,7 @@ class MemberStoryRating extends Model
     public function updateRating(int $newRating, ?string $newComment = null): bool
     {
         try {
-            if (!in_array($newRating, self::VALID_RATINGS)) {
+            if (! in_array($newRating, self::VALID_RATINGS)) {
                 throw new \InvalidArgumentException('Invalid rating value');
             }
 
@@ -481,13 +488,15 @@ class MemberStoryRating extends Model
             if ($result) {
                 self::updateStoryAggregate($this->story_id);
             }
+
             return $result;
         } catch (\Exception $e) {
             \Log::error('Failed to update rating', [
                 'rating_id' => $this->id,
                 'new_rating' => $newRating,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -502,8 +511,8 @@ class MemberStoryRating extends Model
     {
         static::saving(function ($rating) {
             // Validate rating value
-            if (!in_array($rating->rating, self::VALID_RATINGS)) {
-                throw new \InvalidArgumentException('Rating must be between ' . self::MIN_RATING . ' and ' . self::MAX_RATING);
+            if (! in_array($rating->rating, self::VALID_RATINGS)) {
+                throw new \InvalidArgumentException('Rating must be between '.self::MIN_RATING.' and '.self::MAX_RATING);
             }
 
             // Clean comment
@@ -522,7 +531,7 @@ class MemberStoryRating extends Model
         });
 
         static::deleted(function ($rating) {
-            // Update aggregates and clear caches  
+            // Update aggregates and clear caches
             self::updateStoryAggregate($rating->story_id);
             cache()->forget("member_rating_{$rating->member_id}_{$rating->story_id}");
         });
@@ -550,7 +559,7 @@ class MemberStoryRating extends Model
         return [
             'member_id' => 'required|integer|exists:members,id',
             'story_id' => 'required|integer|exists:stories,id',
-            'rating' => 'required|integer|min:' . self::MIN_RATING . '|max:' . self::MAX_RATING,
+            'rating' => 'required|integer|min:'.self::MIN_RATING.'|max:'.self::MAX_RATING,
             'comment' => 'nullable|string|max:1000|min:10',
             'is_verified' => 'boolean',
             'helpful_count' => 'integer|min:0',
@@ -562,7 +571,7 @@ class MemberStoryRating extends Model
         return [
             'member_id.exists' => 'The selected member does not exist.',
             'story_id.exists' => 'The selected story does not exist.',
-            'rating.between' => 'Rating must be between ' . self::MIN_RATING . ' and ' . self::MAX_RATING . ' stars.',
+            'rating.between' => 'Rating must be between '.self::MIN_RATING.' and '.self::MAX_RATING.' stars.',
             'comment.min' => 'Comment must be at least 10 characters long.',
             'comment.max' => 'Comment cannot exceed 1000 characters.',
         ];
@@ -576,7 +585,7 @@ class MemberStoryRating extends Model
 
     public function getFilamentName(): string
     {
-        return $this->member?->name . ' → ' . $this->story?->title . ' (' . $this->rating . '⭐)';
+        return $this->member?->name.' → '.$this->story?->title.' ('.$this->rating.'⭐)';
     }
 
     public function getRatingBadgeColor(): string
@@ -604,8 +613,9 @@ class MemberStoryRating extends Model
         } catch (\Exception $e) {
             \Log::error('Failed to bulk verify ratings', [
                 'rating_ids' => $ratingIds,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return 0;
         }
     }

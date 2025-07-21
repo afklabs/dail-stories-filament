@@ -19,7 +19,7 @@ class EnsureUserIsAdmin
     public function handle(Request $request, Closure $next): Response
     {
         // Check if user is authenticated
-        if (!$request->user()) {
+        if (! $request->user()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Authentication required',
@@ -32,7 +32,7 @@ class EnsureUserIsAdmin
         // Check if user can access admin panel (using Filament's built-in method)
         if (method_exists($user, 'canAccessPanel')) {
             $panel = \Filament\Facades\Filament::getCurrentPanel();
-            if (!$user->canAccessPanel($panel)) {
+            if (! $user->canAccessPanel($panel)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Admin access required',
@@ -52,7 +52,7 @@ class EnsureUserIsAdmin
 
         // Alternative: Simple status check for Member model
         if ($user instanceof \App\Models\Member) {
-            if ($user->status !== 'active' || !$user->email_verified_at) {
+            if ($user->status !== 'active' || ! $user->email_verified_at) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Account verification required',

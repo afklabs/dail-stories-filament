@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Story;
 use App\Models\Member;
 use App\Models\MemberStoryInteraction;
+use App\Models\Story;
 use App\Models\StoryView;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 class StoryInteractionSeeder extends Seeder
@@ -19,19 +19,16 @@ class StoryInteractionSeeder extends Seeder
         $stories = Story::where('active', true)->get();
         $members = Member::where('status', 'active')->get();
 
-        if ($members->isEmpty() || $stories->isEmpty())
-        {
+        if ($members->isEmpty() || $stories->isEmpty()) {
             return;
         }
 
-        foreach ($stories as $story)
-        {
+        foreach ($stories as $story) {
             $viewCount = rand(10, 500);
             $memberViewCount = intval($viewCount * 0.3);
             $viewingMembers = $members->random(min($memberViewCount, $members->count()));
 
-            foreach ($viewingMembers as $member)
-            {
+            foreach ($viewingMembers as $member) {
                 $sessionId = Str::random(16);
                 $deviceId = strtolower(Str::random(16));
 
@@ -57,8 +54,7 @@ class StoryInteractionSeeder extends Seeder
                 ]);
             }
 
-            for ($i = 0; $i < ($viewCount - $memberViewCount); $i++)
-            {
+            for ($i = 0; $i < ($viewCount - $memberViewCount); $i++) {
                 StoryView::create([
                     'story_id' => $story->id,
                     'member_id' => null,
@@ -80,8 +76,7 @@ class StoryInteractionSeeder extends Seeder
             $bookmarkCount = rand(intval($memberViewCount * 0.05), intval($memberViewCount * 0.15));
             $bookmarkingMembers = $viewingMembers->random(min($bookmarkCount, $viewingMembers->count()));
 
-            foreach ($bookmarkingMembers as $member)
-            {
+            foreach ($bookmarkingMembers as $member) {
                 MemberStoryInteraction::firstOrCreate([
                     'member_id' => $member->id,
                     'story_id' => $story->id,
@@ -92,8 +87,7 @@ class StoryInteractionSeeder extends Seeder
             $shareCount = rand(intval($memberViewCount * 0.02), intval($memberViewCount * 0.08));
             $sharingMembers = $viewingMembers->random(min($shareCount, $viewingMembers->count()));
 
-            foreach ($sharingMembers as $member)
-            {
+            foreach ($sharingMembers as $member) {
                 MemberStoryInteraction::firstOrCreate([
                     'member_id' => $member->id,
                     'story_id' => $story->id,

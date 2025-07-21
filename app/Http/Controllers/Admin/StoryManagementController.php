@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Story, StoryView, StoryRatingAggregate, StoryPublishingHistory, Member, MemberStoryRating, MemberStoryInteraction, Setting};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Cache, Log, DB, Validator, Gate};
-use Illuminate\Database\Eloquent\{ModelNotFoundException, Builder};
-use Carbon\Carbon;
+use App\Models\Story;
+use App\Models\StoryPublishingHistory;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,17 +30,17 @@ class StoryManagementController extends Controller
     {
         try {
             Gate::authorize('update', $story);
-            
+
             DB::transaction(function () use ($story) {
                 $previousStatus = $story->active;
                 $previousActiveUntil = $story->active_until;
-                
+
                 $story->update([
                     'active' => true,
                     'active_from' => now(),
                     'active_until' => $story->active_until ?? now()->addDays(30),
                 ]);
-                
+
                 // Record publishing history
                 StoryPublishingHistory::recordAction(
                     $story->id,
@@ -47,7 +51,7 @@ class StoryManagementController extends Controller
                     'Quick published via admin panel',
                     ['active', 'active_from', 'active_until']
                 );
-                
+
                 // Clear related caches
                 $this->clearStoryCache($story->id);
             });
@@ -65,9 +69,9 @@ class StoryManagementController extends Controller
         } catch (\Exception $e) {
             Log::error('Quick publish error', [
                 'story_id' => $story->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return $this->errorResponse('Failed to publish story', 500);
         }
     }
@@ -79,12 +83,12 @@ class StoryManagementController extends Controller
     {
         try {
             Gate::authorize('update', $story);
-            
+
             DB::transaction(function () use ($story) {
                 $previousStatus = $story->active;
-                
+
                 $story->update(['active' => false]);
-                
+
                 // Record publishing history
                 StoryPublishingHistory::recordAction(
                     $story->id,
@@ -95,7 +99,7 @@ class StoryManagementController extends Controller
                     'Quick unpublished via admin panel',
                     ['active']
                 );
-                
+
                 $this->clearStoryCache($story->id);
             });
 
@@ -111,9 +115,9 @@ class StoryManagementController extends Controller
         } catch (\Exception $e) {
             Log::error('Quick unpublish error', [
                 'story_id' => $story->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return $this->errorResponse('Failed to unpublish story', 500);
         }
     }
@@ -138,18 +142,18 @@ class StoryManagementController extends Controller
 
         try {
             Gate::authorize('update', $story);
-            
+
             $days = $request->integer('days');
             $reason = $request->string('reason', 'Publishing period extended via admin panel');
-            
+
             DB::transaction(function () use ($story, $days, $reason) {
                 $previousActiveUntil = $story->active_until;
-                $newActiveUntil = $story->active_until 
+                $newActiveUntil = $story->active_until
                     ? $story->active_until->addDays($days)
                     : now()->addDays($days);
-                
+
                 $story->update(['active_until' => $newActiveUntil]);
-                
+
                 // Record publishing history
                 StoryPublishingHistory::recordAction(
                     $story->id,
@@ -160,7 +164,7 @@ class StoryManagementController extends Controller
                     $reason,
                     ['active_until']
                 );
-                
+
                 $this->clearStoryCache($story->id);
             });
 
@@ -176,9 +180,9 @@ class StoryManagementController extends Controller
         } catch (\Exception $e) {
             Log::error('Extend publishing error', [
                 'story_id' => $story->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return $this->errorResponse('Failed to extend publishing period', 500);
         }
     }
@@ -190,7 +194,7 @@ class StoryManagementController extends Controller
     {
         $hours = $request->integer('hours', 24);
         $hours = min(max($hours, 1), 168); // 1 hour to 1 week
-        
+
         try {
             $stories = Story::expiringSoon($hours)
                 ->with(['category:id,name', 'ratingAggregate:story_id,average_rating,total_ratings'])
@@ -198,7 +202,7 @@ class StoryManagementController extends Controller
                 ->orderBy('active_until')
                 ->limit(50)
                 ->get();
-                
+
             $transformedStories = $stories->map(function ($story) {
                 return [
                     'id' => $story->id,
@@ -220,7 +224,7 @@ class StoryManagementController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Expiring stories error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load expiring stories');
         }
     }
@@ -247,22 +251,22 @@ class StoryManagementController extends Controller
         try {
             $storyIds = $request->input('story_ids');
             $activeUntilDays = $request->integer('active_until_days', 30);
-            
+
             $results = DB::transaction(function () use ($storyIds, $activeUntilDays) {
                 $successCount = 0;
                 $failedStories = [];
-                
+
                 foreach ($storyIds as $storyId) {
                     try {
                         $story = Story::findOrFail($storyId);
                         Gate::authorize('update', $story);
-                        
+
                         $story->update([
                             'active' => true,
                             'active_from' => now(),
                             'active_until' => now()->addDays($activeUntilDays),
                         ]);
-                        
+
                         // Record publishing history
                         StoryPublishingHistory::recordAction(
                             $story->id,
@@ -273,7 +277,7 @@ class StoryManagementController extends Controller
                             'Bulk published via admin panel',
                             ['active', 'active_from', 'active_until']
                         );
-                        
+
                         $this->clearStoryCache($story->id);
                         $successCount++;
                     } catch (\Exception $e) {
@@ -283,7 +287,7 @@ class StoryManagementController extends Controller
                         ];
                     }
                 }
-                
+
                 return [
                     'success_count' => $successCount,
                     'failed_stories' => $failedStories,
@@ -297,7 +301,7 @@ class StoryManagementController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Bulk publish error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to perform bulk publish operation', 500);
         }
     }
@@ -316,8 +320,8 @@ class StoryManagementController extends Controller
         foreach ($patterns as $pattern) {
             Cache::forget($pattern);
         }
-        
+
         // Clear dashboard cache
-        Cache::forget('dashboard_overview_' . now()->format('Y-m-d-H-i'));
+        Cache::forget('dashboard_overview_'.now()->format('Y-m-d-H-i'));
     }
 }

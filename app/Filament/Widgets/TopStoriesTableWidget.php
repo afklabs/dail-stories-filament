@@ -2,16 +2,18 @@
 
 namespace App\Filament\Widgets;
 
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Widgets\TableWidget as BaseTableWidget;
 use App\Models\Story;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Support\Number;
 
 class TopStoriesTableWidget extends BaseTableWidget
 {
     protected static ?string $heading = 'Top Performing Stories (Last 7 Days)';
+
     protected static ?int $sort = 4;
+
     protected static bool $isLazy = true;
 
     public function table(Table $table): Table
@@ -24,12 +26,12 @@ class TopStoriesTableWidget extends BaseTableWidget
                     },
                     'interactions as recent_interactions' => function ($query) {
                         $query->where('created_at', '>=', now()->subDays(7));
-                    }
+                    },
                 ])
-                ->with(['category', 'ratingAggregate'])
-                ->where('active', true)
-                ->orderByDesc('recent_views')
-                ->limit(10)
+                    ->with(['category', 'ratingAggregate'])
+                    ->where('active', true)
+                    ->orderByDesc('recent_views')
+                    ->limit(10)
             )
             ->columns([
                 TextColumn::make('title')
@@ -39,6 +41,7 @@ class TopStoriesTableWidget extends BaseTableWidget
                         if (strlen($state) <= 40) {
                             return null;
                         }
+
                         return $state;
                     })
                     ->searchable()
@@ -66,14 +69,24 @@ class TopStoriesTableWidget extends BaseTableWidget
                     ->numeric(decimalPlaces: 1)
                     ->sortable()
                     ->formatStateUsing(function ($state) {
-                        if (!$state) return 'No ratings';
-                        return number_format($state, 1) . '/5';
+                        if (! $state) {
+                            return 'No ratings';
+                        }
+
+                        return number_format($state, 1).'/5';
                     })
                     ->badge()
                     ->color(function ($state) {
-                        if (!$state) return 'gray';
-                        if ($state >= 4.5) return 'success';
-                        if ($state >= 3.5) return 'warning';
+                        if (! $state) {
+                            return 'gray';
+                        }
+                        if ($state >= 4.5) {
+                            return 'success';
+                        }
+                        if ($state >= 3.5) {
+                            return 'warning';
+                        }
+
                         return 'danger';
                     }),
 

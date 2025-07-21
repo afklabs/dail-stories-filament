@@ -4,9 +4,9 @@ namespace App\Filament\Resources\PermissionResource\Pages;
 
 use App\Filament\Resources\PermissionResource;
 use Filament\Actions;
-use Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
+use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Enums\FontWeight;
 
 class ViewPermission extends ViewRecord
@@ -23,10 +23,11 @@ class ViewPermission extends ViewRecord
                 ->modalDescription(function () {
                     $rolesCount = $this->record->roles()->count();
                     $usersCount = $this->record->users()->count();
-                    
+
                     if ($rolesCount > 0 || $usersCount > 0) {
                         return "This permission is assigned to {$rolesCount} role(s) and {$usersCount} user(s). Deleting it will remove their access. Are you sure?";
                     }
+
                     return 'Are you sure you want to delete this permission?';
                 }),
 
@@ -38,24 +39,24 @@ class ViewPermission extends ViewRecord
                     $roles = $this->record->roles;
                     $users = $this->record->users;
                     $totalUsers = collect();
-                    
+
                     // Get users through roles
                     foreach ($roles as $role) {
                         $totalUsers = $totalUsers->merge($role->users);
                     }
-                    
+
                     // Add users with direct permission
                     $totalUsers = $totalUsers->merge($users)->unique('id');
-                    
+
                     $message = "Permission Usage Report:\n\n";
                     $message .= "Assigned to {$roles->count()} role(s):\n";
                     foreach ($roles as $role) {
                         $message .= "- {$role->name} ({$role->users->count()} users)\n";
                     }
-                    
+
                     $message .= "\nDirect user assignments: {$users->count()}\n";
                     $message .= "Total affected users: {$totalUsers->count()}\n";
-                    
+
                     \Filament\Notifications\Notification::make()
                         ->info()
                         ->title('Permission Usage')
@@ -71,14 +72,14 @@ class ViewPermission extends ViewRecord
                 ->action(function () {
                     $roles = \Spatie\Permission\Models\Role::all();
                     $assigned = 0;
-                    
+
                     foreach ($roles as $role) {
-                        if (!$role->hasPermissionTo($this->record)) {
+                        if (! $role->hasPermissionTo($this->record)) {
                             $role->givePermissionTo($this->record);
                             $assigned++;
                         }
                     }
-                    
+
                     \Filament\Notifications\Notification::make()
                         ->success()
                         ->title('Permission assigned to all roles')
@@ -97,28 +98,28 @@ class ViewPermission extends ViewRecord
                 ->action(function () {
                     $roles = $this->record->roles;
                     $users = $this->record->users;
-                    
+
                     $content = "Permission Usage Report\n";
                     $content .= "======================\n\n";
                     $content .= "Permission: {$this->record->name}\n";
                     $content .= "Guard: {$this->record->guard_name}\n";
-                    $content .= "Category: " . ($this->record->category ?? 'None') . "\n";
-                    $content .= "Description: " . ($this->record->description ?? 'None') . "\n\n";
-                    
+                    $content .= 'Category: '.($this->record->category ?? 'None')."\n";
+                    $content .= 'Description: '.($this->record->description ?? 'None')."\n\n";
+
                     $content .= "Assigned Roles ({$roles->count()}):\n";
                     $content .= "--------------------\n";
                     foreach ($roles as $role) {
                         $content .= "- {$role->name} ({$role->users->count()} users)\n";
                     }
-                    
+
                     $content .= "\nDirect User Assignments ({$users->count()}):\n";
                     $content .= "--------------------------------\n";
                     foreach ($users as $user) {
                         $content .= "- {$user->name} ({$user->email})\n";
                     }
-                    
-                    $content .= "\nGenerated: " . now()->format('Y-m-d H:i:s') . "\n";
-                    
+
+                    $content .= "\nGenerated: ".now()->format('Y-m-d H:i:s')."\n";
+
                     return response()->streamDownload(function () use ($content) {
                         echo $content;
                     }, "permission_{$this->record->name}_usage.txt");
@@ -161,6 +162,7 @@ class ViewPermission extends ViewRecord
                                     ->formatStateUsing(function () {
                                         $rolesCount = $this->record->roles()->count();
                                         $usersCount = $this->record->users()->count();
+
                                         return "{$rolesCount} roles, {$usersCount} direct users";
                                     })
                                     ->badge()
@@ -226,16 +228,16 @@ class ViewPermission extends ViewRecord
                             ->label('Summary')
                             ->formatStateUsing(function () {
                                 $totalUsers = collect();
-                                
+
                                 // Users through roles
                                 foreach ($this->record->roles as $role) {
                                     $totalUsers = $totalUsers->merge($role->users);
                                 }
-                                
+
                                 // Direct users
                                 $totalUsers = $totalUsers->merge($this->record->users);
-                                
-                                return $totalUsers->unique('id')->count() . ' unique users have this permission';
+
+                                return $totalUsers->unique('id')->count().' unique users have this permission';
                             })
                             ->badge()
                             ->color('warning'),

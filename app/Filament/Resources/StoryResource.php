@@ -4,31 +4,19 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\StoryResource\Pages;
 use App\Models\Story;
-use App\Models\Category;
-use App\Models\Tag;
 use Filament\Forms;
 use Filament\Forms\Form;
-use App\Models\StoryPublishingHistory; // ADD THIS LINE
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Table;
+// ADD THIS LINE
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
-use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
+use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\Filter;
-use Filament\Forms\Components\DateTimePicker;
+use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ImageColumn;
-use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\DeleteBulkAction;
-use Filament\Support\Colors\Color;
-use Illuminate\Support\HtmlString;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class StoryResource extends Resource
 {
@@ -81,15 +69,15 @@ class StoryResource extends Resource
                             ->live(onBlur: true)
                             ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
                                 // Auto-generate excerpt if not manually set
-                                if (empty($get('excerpt')) && !empty($state)) {
+                                if (empty($get('excerpt')) && ! empty($state)) {
                                     $plainText = strip_tags($state);
                                     $plainText = preg_replace('/\s+/', ' ', $plainText);
-                                    $excerpt = substr(trim($plainText), 0, 160) . '...';
+                                    $excerpt = substr(trim($plainText), 0, 160).'...';
                                     $set('excerpt', $excerpt);
                                 }
-                                
+
                                 // Auto-calculate reading time
-                                if (!empty($state)) {
+                                if (! empty($state)) {
                                     $wordCount = str_word_count(strip_tags($state));
                                     $readingTime = max(1, ceil($wordCount / 200));
                                     $set('reading_time_minutes', $readingTime);
@@ -217,6 +205,7 @@ class StoryResource extends Resource
                     ->limit(50)
                     ->tooltip(function (TextColumn $column): ?string {
                         $state = $column->getState();
+
                         return strlen($state) > 50 ? $state : null;
                     }),
 
@@ -256,7 +245,7 @@ class StoryResource extends Resource
 
                 Tables\Columns\TextColumn::make('reading_time_minutes')
                     ->label('Reading Time')
-                    ->formatStateUsing(fn ($state) => $state . ' min')
+                    ->formatStateUsing(fn ($state) => $state.' min')
                     ->alignCenter()
                     ->sortable(),
 
@@ -265,7 +254,8 @@ class StoryResource extends Resource
                     ->formatStateUsing(function ($record) {
                         $rating = $record->average_rating;
                         $count = $record->total_ratings;
-                        return $rating > 0 ? number_format($rating, 1) . ' ★ (' . $count . ')' : 'No ratings';
+
+                        return $rating > 0 ? number_format($rating, 1).' ★ ('.$count.')' : 'No ratings';
                     })
                     ->alignCenter(),
 
@@ -293,21 +283,18 @@ class StoryResource extends Resource
                     ]),
 
                 Filter::make('scheduled')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->where('active', true)
-                              ->where('active_from', '>', now())
+                    ->query(fn (Builder $query): Builder => $query->where('active', true)
+                        ->where('active_from', '>', now())
                     ),
 
                 Filter::make('expired')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->where('active', true)
-                              ->where('active_until', '<', now())
+                    ->query(fn (Builder $query): Builder => $query->where('active', true)
+                        ->where('active_until', '<', now())
                     ),
 
                 Filter::make('high_views')
                     ->label('High Views (>1000)')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->where('views', '>', 1000)
+                    ->query(fn (Builder $query): Builder => $query->where('views', '>', 1000)
                     ),
             ])
             ->actions([
@@ -321,8 +308,8 @@ class StoryResource extends Resource
                     ->color(fn ($record) => $record->active ? 'danger' : 'success')
                     ->action(function ($record) {
                         $record->update([
-                            'active' => !$record->active,
-                            'active_from' => !$record->active ? now() : $record->active_from,
+                            'active' => ! $record->active,
+                            'active_from' => ! $record->active ? now() : $record->active_from,
                         ]);
                     })
                     ->requiresConfirmation(),
@@ -417,7 +404,7 @@ class StoryResource extends Resource
                                     ->icon('heroicon-o-eye'),
 
                                 Infolists\Components\TextEntry::make('reading_time_minutes')
-                                    ->formatStateUsing(fn ($state) => $state . ' minutes'),
+                                    ->formatStateUsing(fn ($state) => $state.' minutes'),
                             ]),
 
                         Infolists\Components\Grid::make(3)
@@ -436,7 +423,8 @@ class StoryResource extends Resource
                                     ->formatStateUsing(function ($record) {
                                         $rating = $record->average_rating;
                                         $count = $record->total_ratings;
-                                        return $rating > 0 ? number_format($rating, 1) . ' ★ (' . $count . ' ratings)' : 'No ratings yet';
+
+                                        return $rating > 0 ? number_format($rating, 1).' ★ ('.$count.' ratings)' : 'No ratings yet';
                                     }),
                             ]),
                     ]),

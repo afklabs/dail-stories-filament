@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 class TopMembersWidget extends BaseWidget
 {
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
+
     protected static ?string $pollingInterval = '300s';
+
     protected static bool $isLazy = true;
 
     protected function getTableHeading(): string
@@ -30,9 +32,10 @@ class TopMembersWidget extends BaseWidget
                     ->size(40)
                     ->defaultImageUrl(function ($record) {
                         if ($record->avatar) {
-                            return asset('storage/members/avatars/' . $record->avatar);
+                            return asset('storage/members/avatars/'.$record->avatar);
                         }
-                        return 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($record->email))) . '?d=mp&s=80';
+
+                        return 'https://www.gravatar.com/avatar/'.md5(strtolower(trim($record->email))).'?d=mp&s=80';
                     }),
 
                 Tables\Columns\TextColumn::make('name')
@@ -64,7 +67,8 @@ class TopMembersWidget extends BaseWidget
                     ->formatStateUsing(function ($record) {
                         try {
                             $stats = $record->getStats();
-                            return $stats['completion_rate'] . '%';
+
+                            return $stats['completion_rate'].'%';
                         } catch (\Exception $e) {
                             return 'N/A';
                         }
@@ -78,7 +82,8 @@ class TopMembersWidget extends BaseWidget
                         try {
                             $stats = $record->getStats();
                             $days = $stats['reading_streak_days'] ?? 0;
-                            return $days . ' day' . ($days !== 1 ? 's' : '');
+
+                            return $days.' day'.($days !== 1 ? 's' : '');
                         } catch (\Exception $e) {
                             return '0 days';
                         }
@@ -109,12 +114,12 @@ class TopMembersWidget extends BaseWidget
         try {
             return Member::query()
                 ->select([
-                    'id', 
-                    'name', 
-                    'email', 
-                    'avatar', 
+                    'id',
+                    'name',
+                    'email',
+                    'avatar',
                     'last_login_at',
-                    'status'
+                    'status',
                 ])
                 ->active()
                 ->withCount([
@@ -123,14 +128,14 @@ class TopMembersWidget extends BaseWidget
                     },
                     'interactions as recent_interactions_count' => function ($query) {
                         $query->where('created_at', '>=', now()->subDays(30));
-                    }
+                    },
                 ])
                 ->having('recent_views_count', '>', 0)
                 ->orderBy('recent_views_count', 'desc')
                 ->limit(8);
         } catch (\Exception $e) {
             \Log::error('TopMembersWidget query error', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return Member::query()->whereRaw('1 = 0');

@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
-use Carbon\Carbon;
 
 class MemberReadingHistory extends Model
 {
@@ -118,7 +117,7 @@ class MemberReadingHistory extends Model
     protected function progressPercentage(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => number_format((float) $this->reading_progress, 1) . '%'
+            get: fn () => number_format((float) $this->reading_progress, 1).'%'
         );
     }
 
@@ -136,7 +135,7 @@ class MemberReadingHistory extends Model
                 } elseif ($minutes > 0) {
                     return sprintf('%dm %ds', $minutes, $seconds);
                 }
-                
+
                 return sprintf('%ds', $seconds);
             }
         );
@@ -222,8 +221,9 @@ class MemberReadingHistory extends Model
                 'history_id' => $this->id,
                 'progress' => $progress,
                 'additional_time' => $additionalTime,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -244,8 +244,9 @@ class MemberReadingHistory extends Model
             \Log::error('Failed to add reading time', [
                 'history_id' => $this->id,
                 'seconds' => $seconds,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -272,8 +273,8 @@ class MemberReadingHistory extends Model
                 'total_reading_time_minutes' => round($history->sum('time_spent') / 60, 2),
                 'avg_progress' => round($history->avg('reading_progress'), 2),
                 'avg_reading_time_minutes' => round($history->avg('time_spent') / 60, 2),
-                'completion_rate' => $totalStories > 0 
-                    ? round(($completedStories / $totalStories) * 100, 1) 
+                'completion_rate' => $totalStories > 0
+                    ? round(($completedStories / $totalStories) * 100, 1)
                     : 0,
                 'last_read_at' => $history->latest('last_read_at')->value('last_read_at'),
             ];
@@ -295,8 +296,8 @@ class MemberReadingHistory extends Model
                 'avg_progress' => round($history->avg('reading_progress'), 2),
                 'avg_reading_time_minutes' => round($history->avg('time_spent') / 60, 2),
                 'total_reading_time_minutes' => round($history->sum('time_spent') / 60, 2),
-                'completion_rate' => $totalReaders > 0 
-                    ? round(($completedReaders / $totalReaders) * 100, 1) 
+                'completion_rate' => $totalReaders > 0
+                    ? round(($completedReaders / $totalReaders) * 100, 1)
                     : 0,
                 'most_recent_read' => $history->latest('last_read_at')->value('last_read_at'),
             ];
@@ -340,6 +341,7 @@ class MemberReadingHistory extends Model
                 ->map(function ($item) {
                     $item->total_time_minutes = round($item->total_time / 60, 2);
                     $item->avg_progress = round($item->avg_progress, 2);
+
                     return $item;
                 });
         });
@@ -356,9 +358,10 @@ class MemberReadingHistory extends Model
                 ->get();
 
             return $data->map(function ($item) {
-                $item->completion_rate = $item->total > 0 
-                    ? round(($item->completed / $item->total) * 100, 2) 
+                $item->completion_rate = $item->total > 0
+                    ? round(($item->completed / $item->total) * 100, 2)
                     : 0;
+
                 return $item;
             })->toArray();
         });
@@ -371,8 +374,8 @@ class MemberReadingHistory extends Model
             $avgWordsPerStory = 1000;
             $avgTimeSpent = self::where('reading_progress', '>=', 100)
                 ->avg('time_spent');
-            
-            if (!$avgTimeSpent || $avgTimeSpent <= 0) {
+
+            if (! $avgTimeSpent || $avgTimeSpent <= 0) {
                 return 250; // Default words per minute
             }
 
@@ -402,7 +405,7 @@ class MemberReadingHistory extends Model
                 // Clear related caches
                 cache()->forget("member_reading_stats_{$model->member_id}");
                 cache()->forget("story_reading_stats_{$model->story_id}");
-                
+
                 // Update story view if member exists and has device_id
                 if ($model->member && $model->member->device_id) {
                     \App\Models\StoryView::updateOrCreate(
@@ -421,7 +424,7 @@ class MemberReadingHistory extends Model
             } catch (\Exception $e) {
                 \Log::error('Error in MemberReadingHistory saved event', [
                     'model_id' => $model->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
         });
@@ -462,7 +465,7 @@ class MemberReadingHistory extends Model
 
     public function getFilamentName(): string
     {
-        return $this->member?->name . ' → ' . $this->story?->title;
+        return $this->member?->name.' → '.$this->story?->title;
     }
 
     public function getProgressBadgeColor(): string

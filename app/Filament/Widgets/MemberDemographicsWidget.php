@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\DB;
 class MemberDemographicsWidget extends ChartWidget
 {
     protected static string $color = 'warning';
+
     protected static ?string $pollingInterval = '600s';
+
     protected static bool $isLazy = true;
 
     public function getHeading(): string
@@ -20,7 +22,7 @@ class MemberDemographicsWidget extends ChartWidget
     protected function getData(): array
     {
         try {
-            $ageGroups = cache()->remember('dashboard.member_demographics', 600, function() {
+            $ageGroups = cache()->remember('dashboard.member_demographics', 600, function () {
                 return Member::select(
                     DB::raw('CASE 
                         WHEN TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) < 18 THEN "Under 18"
@@ -33,9 +35,9 @@ class MemberDemographicsWidget extends ChartWidget
                         END as age_group'),
                     DB::raw('COUNT(*) as count')
                 )
-                ->groupBy('age_group')
-                ->pluck('count', 'age_group')
-                ->toArray();
+                    ->groupBy('age_group')
+                    ->pluck('count', 'age_group')
+                    ->toArray();
             });
 
             $expectedGroups = [
@@ -45,7 +47,7 @@ class MemberDemographicsWidget extends ChartWidget
                 '35-44',
                 '45-54',
                 '55+',
-                'Unknown'
+                'Unknown',
             ];
 
             $data = [];
@@ -57,11 +59,11 @@ class MemberDemographicsWidget extends ChartWidget
                 '#10b981', // Emerald
                 '#f59e0b', // Amber
                 '#ef4444', // Red
-                '#6b7280'  // Gray
+                '#6b7280',  // Gray
             ];
 
             $finalColors = [];
-            
+
             foreach ($expectedGroups as $group) {
                 if (isset($ageGroups[$group]) && $ageGroups[$group] > 0) {
                     $data[] = $ageGroups[$group];
@@ -97,7 +99,7 @@ class MemberDemographicsWidget extends ChartWidget
             ];
         } catch (\Exception $e) {
             \Log::error('Dashboard Demographics widget error', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
@@ -143,7 +145,7 @@ class MemberDemographicsWidget extends ChartWidget
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
                             return label + ": " + value + " members (" + percentage + "%)";
-                        }'
+                        }',
                     ],
                 ],
             ],

@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Story, StoryPublishingHistory, Setting, User};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Cache, Log, DB, Validator, Storage, Artisan};
-use Carbon\Carbon;
+use App\Models\Setting;
+use App\Models\Story;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 /*
 |--------------------------------------------------------------------------
@@ -37,7 +43,7 @@ class SettingsController extends BaseAdminController
             return $this->successResponse($settings, 'Story default settings retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Get story defaults error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load story default settings');
         }
     }
@@ -65,7 +71,7 @@ class SettingsController extends BaseAdminController
         }
 
         try {
-            if (!$this->checkPermission('manage_settings')) {
+            if (! $this->checkPermission('manage_settings')) {
                 return $this->errorResponse('Unauthorized', 403);
             }
 
@@ -97,7 +103,7 @@ class SettingsController extends BaseAdminController
             return $this->successResponse([], 'Story default settings updated successfully');
         } catch (\Exception $e) {
             Log::error('Update story defaults error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to update story default settings');
         }
     }
@@ -109,7 +115,7 @@ class SettingsController extends BaseAdminController
     {
         try {
             $cacheKey = 'system_settings';
-            
+
             $settings = Cache::remember($cacheKey, 3600, function (): array {
                 return [
                     'cache_settings' => $this->getCacheSettings(),
@@ -123,7 +129,7 @@ class SettingsController extends BaseAdminController
             return $this->successResponse($settings, 'System settings retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Get system settings error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load system settings');
         }
     }
@@ -150,7 +156,7 @@ class SettingsController extends BaseAdminController
         }
 
         try {
-            if (!$this->checkPermission('manage_system_settings')) {
+            if (! $this->checkPermission('manage_system_settings')) {
                 return $this->errorResponse('Unauthorized', 403);
             }
 
@@ -178,7 +184,7 @@ class SettingsController extends BaseAdminController
             return $this->successResponse([], 'System settings updated successfully');
         } catch (\Exception $e) {
             Log::error('Update system settings error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to update system settings');
         }
     }
@@ -189,11 +195,11 @@ class SettingsController extends BaseAdminController
     public function clearCache(Request $request): JsonResponse
     {
         try {
-            if (!$this->checkPermission('manage_cache')) {
+            if (! $this->checkPermission('manage_cache')) {
                 return $this->errorResponse('Unauthorized', 403);
             }
 
-            if (!$this->checkRateLimit('clear_cache', 5, 60)) {
+            if (! $this->checkRateLimit('clear_cache', 5, 60)) {
                 return $this->errorResponse('Rate limit exceeded. Please try again later.', 429);
             }
 
@@ -205,17 +211,17 @@ class SettingsController extends BaseAdminController
                     $this->clearDashboardCache();
                     $clearedCaches[] = 'dashboard';
                     break;
-                    
+
                 case 'analytics':
                     $this->clearAnalyticsCache();
                     $clearedCaches[] = 'analytics';
                     break;
-                    
+
                 case 'stories':
                     $this->clearStoriesCache();
                     $clearedCaches[] = 'stories';
                     break;
-                    
+
                 default:
                     Artisan::call('cache:clear');
                     $clearedCaches = ['all_application_cache'];
@@ -233,7 +239,7 @@ class SettingsController extends BaseAdminController
             ], 'Cache cleared successfully');
         } catch (\Exception $e) {
             Log::error('Clear cache error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to clear cache');
         }
     }
@@ -244,17 +250,17 @@ class SettingsController extends BaseAdminController
     public function refreshAnalytics(): JsonResponse
     {
         try {
-            if (!$this->checkPermission('manage_analytics')) {
+            if (! $this->checkPermission('manage_analytics')) {
                 return $this->errorResponse('Unauthorized', 403);
             }
 
-            if (!$this->checkRateLimit('refresh_analytics', 3, 60)) {
+            if (! $this->checkRateLimit('refresh_analytics', 3, 60)) {
                 return $this->errorResponse('Rate limit exceeded. Please try again later.', 429);
             }
 
             // Clear analytics-specific caches
             $this->clearAnalyticsCache();
-            
+
             // Trigger recalculation of key metrics
             $refreshedMetrics = $this->recalculateAnalytics();
 
@@ -269,7 +275,7 @@ class SettingsController extends BaseAdminController
             ], 'Analytics data refreshed successfully');
         } catch (\Exception $e) {
             Log::error('Refresh analytics error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to refresh analytics data');
         }
     }
@@ -281,7 +287,7 @@ class SettingsController extends BaseAdminController
     {
         try {
             $cacheKey = 'performance_metrics';
-            
+
             $metrics = Cache::remember($cacheKey, 300, function (): array {
                 return [
                     'database_performance' => $this->getDatabasePerformanceMetrics(),
@@ -294,7 +300,7 @@ class SettingsController extends BaseAdminController
             return $this->successResponse($metrics, 'Performance metrics retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Performance metrics error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load performance metrics');
         }
     }
@@ -324,7 +330,7 @@ class SettingsController extends BaseAdminController
             ]);
         } catch (\Exception $e) {
             Log::error('System health check error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'data' => [
@@ -487,6 +493,7 @@ class SettingsController extends BaseAdminController
     {
         try {
             DB::connection()->getPdo();
+
             return 'healthy';
         } catch (\Exception $e) {
             return 'unhealthy';
@@ -499,7 +506,7 @@ class SettingsController extends BaseAdminController
             Cache::put('health_check', 'test', 60);
             $value = Cache::get('health_check');
             Cache::forget('health_check');
-            
+
             return $value === 'test' ? 'healthy' : 'unhealthy';
         } catch (\Exception $e) {
             return 'unhealthy';
@@ -509,11 +516,11 @@ class SettingsController extends BaseAdminController
     private function checkStorageHealth(): string
     {
         try {
-            $testFile = 'health_check_' . time() . '.txt';
+            $testFile = 'health_check_'.time().'.txt';
             Storage::put($testFile, 'test');
             $exists = Storage::exists($testFile);
             Storage::delete($testFile);
-            
+
             return $exists ? 'healthy' : 'unhealthy';
         } catch (\Exception $e) {
             return 'unhealthy';
@@ -535,7 +542,7 @@ class SettingsController extends BaseAdminController
             $health['queue_status'],
         ];
 
-        $unhealthyCount = count(array_filter($healthStatuses, fn($status) => $status !== 'healthy'));
+        $unhealthyCount = count(array_filter($healthStatuses, fn ($status) => $status !== 'healthy'));
 
         if ($unhealthyCount === 0) {
             return 'healthy';
@@ -546,4 +553,3 @@ class SettingsController extends BaseAdminController
         }
     }
 }
-

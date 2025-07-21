@@ -43,12 +43,19 @@ class StoryPublishingHistory extends Model
      * Action type constants
      */
     public const ACTION_PUBLISHED = 'published';
+
     public const ACTION_UNPUBLISHED = 'unpublished';
+
     public const ACTION_REPUBLISHED = 'republished';
+
     public const ACTION_UPDATED = 'updated';
+
     public const ACTION_SCHEDULED = 'scheduled';
+
     public const ACTION_EXPIRED = 'expired';
+
     public const ACTION_RESCHEDULED = 'rescheduled';
+
     public const ACTION_EXTENDED = 'extended';
 
     /**
@@ -69,6 +76,7 @@ class StoryPublishingHistory extends Model
      * Cache constants
      */
     private const CACHE_TTL = 600; // 10 minutes
+
     private const CACHE_TTL_ANALYTICS = 1800; // 30 minutes
 
     /**
@@ -124,7 +132,7 @@ class StoryPublishingHistory extends Model
             if (empty($history->ip_address) && request()) {
                 $history->ip_address = request()->ip();
             }
-            
+
             if (empty($history->user_agent) && request()) {
                 $history->user_agent = request()->header('User-Agent');
             }
@@ -222,7 +230,7 @@ class StoryPublishingHistory extends Model
      */
     public function getChangesSummaryAttribute(): string
     {
-        if (!$this->changed_fields || empty($this->changed_fields)) {
+        if (! $this->changed_fields || empty($this->changed_fields)) {
             return 'No specific changes recorded';
         }
 
@@ -231,7 +239,7 @@ class StoryPublishingHistory extends Model
             return ucfirst(str_replace('_', ' ', $field));
         }, $fields);
 
-        return 'Changed: ' . implode(', ', $formattedFields);
+        return 'Changed: '.implode(', ', $formattedFields);
     }
 
     /**
@@ -260,7 +268,7 @@ class StoryPublishingHistory extends Model
         // Check active_from changes
         if ($this->previous_active_from !== $this->new_active_from) {
             if ($this->new_active_from) {
-                $changes[] = 'Start: ' . $this->new_active_from->format('M j, Y H:i');
+                $changes[] = 'Start: '.$this->new_active_from->format('M j, Y H:i');
             } else {
                 $changes[] = 'Start: Removed';
             }
@@ -269,7 +277,7 @@ class StoryPublishingHistory extends Model
         // Check active_until changes
         if ($this->previous_active_until !== $this->new_active_until) {
             if ($this->new_active_until) {
-                $changes[] = 'End: ' . $this->new_active_until->format('M j, Y H:i');
+                $changes[] = 'End: '.$this->new_active_until->format('M j, Y H:i');
             } else {
                 $changes[] = 'End: Removed';
             }
@@ -394,9 +402,9 @@ class StoryPublishingHistory extends Model
      */
     public static function getPublishingAnalytics(int $days = 30): array
     {
-        return Cache::remember('publishing_analytics_' . $days, self::CACHE_TTL_ANALYTICS, function () use ($days): array {
+        return Cache::remember('publishing_analytics_'.$days, self::CACHE_TTL_ANALYTICS, function () use ($days): array {
             $startDate = Carbon::now()->subDays($days);
-            
+
             return [
                 'activity_summary' => self::getActivitySummary($startDate),
                 'action_breakdown' => self::getActionBreakdown($startDate),
@@ -447,18 +455,18 @@ class StoryPublishingHistory extends Model
     private static function getDailyActivity(int $days): array
     {
         $activity = [];
-        
+
         for ($i = $days - 1; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
             $count = self::whereDate('created_at', $date)->count();
-            
+
             $activity[] = [
                 'date' => $date->format('Y-m-d'),
                 'formatted_date' => $date->format('M j'),
                 'count' => $count,
             ];
         }
-        
+
         return $activity;
     }
 
@@ -514,11 +522,11 @@ class StoryPublishingHistory extends Model
         $highImpact = self::where('created_at', '>=', $startDate)
             ->whereIn('action', [self::ACTION_PUBLISHED, self::ACTION_UNPUBLISHED, self::ACTION_EXPIRED])
             ->count();
-            
+
         $mediumImpact = self::where('created_at', '>=', $startDate)
             ->whereIn('action', [self::ACTION_SCHEDULED, self::ACTION_RESCHEDULED])
             ->count();
-            
+
         $lowImpact = self::where('created_at', '>=', $startDate)
             ->whereIn('action', [self::ACTION_UPDATED, self::ACTION_EXTENDED])
             ->count();
@@ -620,7 +628,7 @@ class StoryPublishingHistory extends Model
         return [
             'story_id' => 'required|exists:stories,id',
             'user_id' => 'required|exists:users,id',
-            'action' => 'required|in:' . implode(',', self::VALID_ACTIONS),
+            'action' => 'required|in:'.implode(',', self::VALID_ACTIONS),
             'previous_active_status' => 'nullable|boolean',
             'new_active_status' => 'nullable|boolean',
             'previous_active_from' => 'nullable|date',
@@ -647,6 +655,6 @@ class StoryPublishingHistory extends Model
      */
     public function getFilamentName(): string
     {
-        return $this->formatted_action . ' - ' . ($this->story?->title ?? 'Unknown Story');
+        return $this->formatted_action.' - '.($this->story?->title ?? 'Unknown Story');
     }
 }

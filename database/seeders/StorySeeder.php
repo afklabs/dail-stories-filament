@@ -2,13 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Story;
 use App\Models\Category;
+use App\Models\Story;
 use App\Models\Tag;
 use App\Models\User;
 use Faker\Factory as Faker;
-use Illuminate\Support\Str;
+use Illuminate\Database\Seeder;
 
 class StorySeeder extends Seeder
 {
@@ -19,8 +18,7 @@ class StorySeeder extends Seeder
         // Get all categories and tags
         $categories = Category::all();
         $tags = Tag::all();
-        $authors = User::whereHas('roles', function ($q)
-        {
+        $authors = User::whereHas('roles', function ($q) {
             $q->whereIn('name', ['author', 'editor', 'admin', 'super-admin']);
         })->get();
 
@@ -57,14 +55,12 @@ class StorySeeder extends Seeder
         ];
 
         // Create stories for each category
-        foreach ($categories as $category)
-        {
+        foreach ($categories as $category) {
             $categorySlug = $category->slug;
             $titles = $storyTitles[$categorySlug] ?? [];
 
             // Create specific stories if titles exist
-            foreach ($titles as $index => $title)
-            {
+            foreach ($titles as $index => $title) {
                 $story = Story::create([
                     'title' => $title,
                     'content' => $this->generateStoryContent($faker, $title),
@@ -85,8 +81,7 @@ class StorySeeder extends Seeder
             }
 
             // Create additional random stories
-            for ($i = 0; $i < rand(3, 5); $i++)
-            {
+            for ($i = 0; $i < rand(3, 5); $i++) {
                 $story = Story::create([
                     'title' => $faker->sentence(rand(6, 10)),
                     'content' => $this->generateStoryContent($faker),
@@ -113,21 +108,17 @@ class StorySeeder extends Seeder
         $paragraphs = [];
 
         // Opening paragraph
-        if ($title)
-        {
-            $paragraphs[] = "In today's rapidly evolving world, " .
-                strtolower(rtrim($title, '.')) .
-                " represents a significant development that deserves our attention. " .
-                "This comprehensive analysis explores the key aspects and implications.";
-        }
-        else
-        {
+        if ($title) {
+            $paragraphs[] = "In today's rapidly evolving world, ".
+                strtolower(rtrim($title, '.')).
+                ' represents a significant development that deserves our attention. '.
+                'This comprehensive analysis explores the key aspects and implications.';
+        } else {
             $paragraphs[] = $faker->paragraph(5);
         }
 
         // Body paragraphs
-        for ($i = 0; $i < rand(4, 8); $i++)
-        {
+        for ($i = 0; $i < rand(4, 8); $i++) {
             $paragraphs[] = $faker->paragraph(rand(4, 8));
         }
 
@@ -140,9 +131,8 @@ class StorySeeder extends Seeder
             'The Bottom Line',
         ];
 
-        foreach (array_rand($subheadings, 3) as $index)
-        {
-            $paragraphs[] = "\n## " . $subheadings[$index] . "\n";
+        foreach (array_rand($subheadings, 3) as $index) {
+            $paragraphs[] = "\n## ".$subheadings[$index]."\n";
             $paragraphs[] = $faker->paragraph(rand(3, 6));
             $paragraphs[] = $faker->paragraph(rand(3, 6));
         }

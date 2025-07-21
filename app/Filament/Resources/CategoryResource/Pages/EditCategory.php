@@ -4,8 +4,8 @@ namespace App\Filament\Resources\CategoryResource\Pages;
 
 use App\Filament\Resources\CategoryResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Str;
 
 class EditCategory extends EditRecord
@@ -23,6 +23,7 @@ class EditCategory extends EditRecord
                     if ($storiesCount > 0) {
                         return "This category has {$storiesCount} stories. Deleting it will also delete all associated stories. Are you sure?";
                     }
+
                     return 'Are you sure you want to delete this category?';
                 }),
         ];
@@ -44,18 +45,18 @@ class EditCategory extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         // Auto-generate slug if not provided
-        if (empty($data['slug']) && !empty($data['name'])) {
+        if (empty($data['slug']) && ! empty($data['name'])) {
             $data['slug'] = Str::slug($data['name']);
         }
 
         // Ensure slug is unique (excluding current record)
         $originalSlug = $data['slug'];
         $counter = 1;
-        
+
         while (\App\Models\Category::where('slug', $data['slug'])
-                   ->where('id', '!=', $this->record->id)
-                   ->exists()) {
-            $data['slug'] = $originalSlug . '-' . $counter;
+            ->where('id', '!=', $this->record->id)
+            ->exists()) {
+            $data['slug'] = $originalSlug.'-'.$counter;
             $counter++;
         }
 

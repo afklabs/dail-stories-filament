@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
-use App\Models\{Story, StoryPublishingHistory, Setting, User};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Cache, Log, DB, Validator, Storage, Artisan};
+use App\Models\Story;
+use App\Models\StoryPublishingHistory;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,13 +29,13 @@ class PublishingController extends BaseAdminController
     {
         $days = $request->integer('days', 30);
         $days = min(max($days, 1), 90);
-        
+
         try {
             $cacheKey = "publishing_stats_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 1800, function () use ($days): array {
                 $analytics = StoryPublishingHistory::getPublishingAnalytics($days);
-                
+
                 return [
                     'activity_summary' => $analytics['activity_summary'] ?? [],
                     'action_breakdown' => $analytics['action_breakdown'] ?? [],
@@ -44,7 +49,7 @@ class PublishingController extends BaseAdminController
             return $this->successResponse($data, 'Publishing statistics retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Publishing stats error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load publishing statistics');
         }
     }
@@ -56,10 +61,10 @@ class PublishingController extends BaseAdminController
     {
         $days = $request->integer('days', 7);
         $type = $request->string('type', 'daily'); // daily, weekly, monthly
-        
+
         try {
             $cacheKey = "publishing_chart_{$type}_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 900, function () use ($days, $type): array {
                 switch ($type) {
                     case 'weekly':
@@ -78,7 +83,7 @@ class PublishingController extends BaseAdminController
             ]);
         } catch (\Exception $e) {
             Log::error('Publishing chart error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load chart data');
         }
     }
@@ -89,13 +94,13 @@ class PublishingController extends BaseAdminController
     public function getAdminActivity(Request $request, int $days = 30): JsonResponse
     {
         $days = min(max($days, 1), 90);
-        
+
         try {
             $cacheKey = "admin_activity_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 1800, function () use ($days): array {
                 $startDate = now()->subDays($days);
-                
+
                 return [
                     'top_admins' => $this->getTopAdminsByActivity($startDate),
                     'action_distribution' => $this->getActionDistribution($startDate),
@@ -107,7 +112,7 @@ class PublishingController extends BaseAdminController
             return $this->successResponse($data, 'Admin activity data retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Admin activity error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load admin activity data');
         }
     }
@@ -119,9 +124,9 @@ class PublishingController extends BaseAdminController
     {
         try {
             Gate::authorize('view', $story);
-            
+
             $cacheKey = "story_timeline_{$story->id}";
-            
+
             $timeline = Cache::remember($cacheKey, 1800, function () use ($story): array {
                 return StoryPublishingHistory::getStoryTimeline($story->id);
             });
@@ -138,9 +143,9 @@ class PublishingController extends BaseAdminController
         } catch (\Exception $e) {
             Log::error('Story timeline error', [
                 'story_id' => $story->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return $this->errorResponse('Failed to load story timeline');
         }
     }
@@ -151,13 +156,13 @@ class PublishingController extends BaseAdminController
     public function getImpactAnalysis(Request $request): JsonResponse
     {
         $days = $request->integer('days', 30);
-        
+
         try {
             $cacheKey = "impact_analysis_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 3600, function () use ($days): array {
                 $startDate = now()->subDays($days);
-                
+
                 return [
                     'high_impact_actions' => $this->getHighImpactActions($startDate),
                     'performance_correlation' => $this->getPerformanceCorrelation($startDate),
@@ -169,7 +174,7 @@ class PublishingController extends BaseAdminController
             return $this->successResponse($data, 'Impact analysis retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Impact analysis error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load impact analysis');
         }
     }
@@ -188,16 +193,16 @@ class PublishingController extends BaseAdminController
         }
 
         try {
-            if (!$this->checkRateLimit('export_publishing_history', 5, 60)) {
+            if (! $this->checkRateLimit('export_publishing_history', 5, 60)) {
                 return $this->errorResponse('Rate limit exceeded. Please try again later.', 429);
             }
 
             $days = $request->integer('days', 30);
             $data = $this->prepareExportData($days);
-            
-            $filename = "publishing_history_{$days}days_" . now()->format('Y-m-d_H-i-s');
+
+            $filename = "publishing_history_{$days}days_".now()->format('Y-m-d_H-i-s');
             $filePath = $this->generateExportFile($data, $format, $filename);
-            
+
             return $this->successResponse([
                 'download_url' => Storage::url($filePath),
                 'filename' => basename($filePath),
@@ -207,7 +212,7 @@ class PublishingController extends BaseAdminController
             ], 'Export file generated successfully');
         } catch (\Exception $e) {
             Log::error('Export error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to generate export file');
         }
     }
@@ -216,7 +221,7 @@ class PublishingController extends BaseAdminController
     private function getPublishingTrends(int $days): array
     {
         $startDate = now()->subDays($days);
-        
+
         $trends = StoryPublishingHistory::where('created_at', '>', $startDate)
             ->selectRaw('DATE(created_at) as date, action, COUNT(*) as count')
             ->groupBy('date', 'action')
@@ -232,7 +237,7 @@ class PublishingController extends BaseAdminController
     private function getPublishingPerformanceMetrics(int $days): array
     {
         $startDate = now()->subDays($days);
-        
+
         return [
             'total_actions' => StoryPublishingHistory::where('created_at', '>', $startDate)->count(),
             'unique_stories_affected' => StoryPublishingHistory::where('created_at', '>', $startDate)
@@ -252,7 +257,7 @@ class PublishingController extends BaseAdminController
     private function getDailyPublishingData(int $days): array
     {
         $startDate = now()->subDays($days);
-        
+
         return StoryPublishingHistory::where('created_at', '>', $startDate)
             ->selectRaw('DATE(created_at) as date, COUNT(*) as total_actions')
             ->groupBy('date')
@@ -271,14 +276,15 @@ class PublishingController extends BaseAdminController
     private function getWeeklyPublishingData(int $weeks): array
     {
         $startDate = now()->subWeeks($weeks);
-        
+
         return StoryPublishingHistory::where('created_at', '>', $startDate)
             ->selectRaw('YEARWEEK(created_at) as week, COUNT(*) as total_actions')
             ->groupBy('week')
             ->orderBy('week')
             ->get()
             ->map(function ($item) {
-                $weekStart = Carbon::parse($item->week . '1')->startOfWeek();
+                $weekStart = Carbon::parse($item->week.'1')->startOfWeek();
+
                 return [
                     'week' => $item->week,
                     'week_start' => $weekStart->format('M j'),
@@ -291,7 +297,7 @@ class PublishingController extends BaseAdminController
     private function getMonthlyPublishingData(int $months): array
     {
         $startDate = now()->subMonths($months);
-        
+
         return StoryPublishingHistory::where('created_at', '>', $startDate)
             ->selectRaw('YEAR(created_at) as year, MONTH(created_at) as month, COUNT(*) as total_actions')
             ->groupBy('year', 'month')
@@ -431,7 +437,7 @@ class PublishingController extends BaseAdminController
     private function prepareExportData(int $days): array
     {
         $startDate = now()->subDays($days);
-        
+
         return StoryPublishingHistory::where('created_at', '>', $startDate)
             ->join('stories', 'story_publishing_history.story_id', '=', 'stories.id')
             ->join('users', 'story_publishing_history.user_id', '=', 'users.id')
@@ -467,39 +473,39 @@ class PublishingController extends BaseAdminController
     {
         $filePath = "exports/{$filename}.csv";
         $fullPath = storage_path("app/public/{$filePath}");
-        
+
         // Ensure directory exists
-        if (!file_exists(dirname($fullPath))) {
+        if (! file_exists(dirname($fullPath))) {
             mkdir(dirname($fullPath), 0755, true);
         }
-        
+
         $file = fopen($fullPath, 'w');
-        
+
         // Write headers
-        if (!empty($data)) {
+        if (! empty($data)) {
             fputcsv($file, array_keys($data[0]));
-            
+
             // Write data
             foreach ($data as $row) {
                 fputcsv($file, $row);
             }
         }
-        
+
         fclose($file);
-        
+
         return $filePath;
     }
 
     private function generateExcelFile(array $data, string $filename): string
     {
         // Simplified Excel generation - in production, use PhpSpreadsheet
-        return $this->generateCSVFile($data, $filename . '_excel');
+        return $this->generateCSVFile($data, $filename.'_excel');
     }
 
     private function generatePDFFile(array $data, string $filename): string
     {
         // Simplified PDF generation - in production, use dompdf or similar
-        return $this->generateCSVFile($data, $filename . '_pdf');
+        return $this->generateCSVFile($data, $filename.'_pdf');
     }
 
     // Simplified calculation methods - implement with real logic

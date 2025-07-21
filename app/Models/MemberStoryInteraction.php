@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
-use Carbon\Carbon;
 
 class MemberStoryInteraction extends Model
 {
@@ -15,10 +14,15 @@ class MemberStoryInteraction extends Model
 
     // ✅ IMPROVED: Added validation-friendly constants
     public const ACTION_LIKE = 'like';
+
     public const ACTION_DISLIKE = 'dislike';
+
     public const ACTION_BOOKMARK = 'bookmark';
+
     public const ACTION_SHARE = 'share';
+
     public const ACTION_VIEW = 'view';
+
     public const ACTION_REPORT = 'report';
 
     public const VALID_ACTIONS = [
@@ -267,8 +271,8 @@ class MemberStoryInteraction extends Model
 
     public static function getTrendingInteractions(int $days = 7, ?string $action = null): Collection
     {
-        $cacheKey = "trending_interactions_{$days}" . ($action ? "_{$action}" : '');
-        
+        $cacheKey = "trending_interactions_{$days}".($action ? "_{$action}" : '');
+
         return cache()->remember($cacheKey, 300, function () use ($days, $action) {
             $query = self::with(['story:id,title,slug', 'member:id,name'])
                 ->where('created_at', '>=', now()->subDays($days));
@@ -299,6 +303,7 @@ class MemberStoryInteraction extends Model
                         $result[$action] = $dayInteractions->where('action', $action)->sum('count');
                     }
                     $result['total'] = $dayInteractions->sum('count');
+
                     return $result;
                 })
                 ->values()
@@ -344,7 +349,9 @@ class MemberStoryInteraction extends Model
         $negative = $interactions->clone()->negative()->count();
         $total = $positive + $negative;
 
-        if ($total === 0) return 0;
+        if ($total === 0) {
+            return 0;
+        }
 
         return round((($positive - $negative) / $total) * 100, 2);
     }
@@ -354,7 +361,9 @@ class MemberStoryInteraction extends Model
         $views = self::where('story_id', $storyId)->views()->count();
         $engagements = self::where('story_id', $storyId)->engagement()->count();
 
-        if ($views === 0) return 0;
+        if ($views === 0) {
+            return 0;
+        }
 
         return round(($engagements / $views) * 100, 2);
     }
@@ -366,7 +375,9 @@ class MemberStoryInteraction extends Model
         $positive = $interactions->clone()->positive()->count();
         $unique_stories = $interactions->clone()->distinct('story_id')->count();
 
-        if ($total === 0) return 0;
+        if ($total === 0) {
+            return 0;
+        }
 
         // Score based on diversity and positivity
         $diversity_score = min($unique_stories / 10, 1); // Max score at 10+ stories
@@ -399,8 +410,9 @@ class MemberStoryInteraction extends Model
             \Log::error('Failed to toggle interaction action', [
                 'interaction_id' => $this->id,
                 'current_action' => $this->action,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -410,14 +422,15 @@ class MemberStoryInteraction extends Model
         try {
             $metadata = $this->metadata ?? [];
             $metadata = array_merge($metadata, $data);
-            
+
             return $this->update(['metadata' => $metadata]);
         } catch (\Exception $e) {
             \Log::error('Failed to add interaction metadata', [
                 'interaction_id' => $this->id,
                 'data' => $data,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -437,11 +450,11 @@ class MemberStoryInteraction extends Model
             // Clear related caches
             cache()->forget("story_interaction_stats_{$model->story_id}");
             cache()->forget("member_interaction_stats_{$model->member_id}");
-            
+
             // Clear trending caches
-            cache()->forget("trending_interactions_7");
-            cache()->forget("most_engaged_stories_10");
-            cache()->forget("most_active_members_10");
+            cache()->forget('trending_interactions_7');
+            cache()->forget('most_engaged_stories_10');
+            cache()->forget('most_active_members_10');
         });
 
         static::deleted(function ($model) {
@@ -459,7 +472,7 @@ class MemberStoryInteraction extends Model
                 ->exists();
 
             if ($existing) {
-                throw new \Exception("Interaction already exists for this member, story, and action.");
+                throw new \Exception('Interaction already exists for this member, story, and action.');
             }
         });
     }
@@ -475,7 +488,7 @@ class MemberStoryInteraction extends Model
         return [
             'member_id' => 'required|integer|exists:members,id',
             'story_id' => 'required|integer|exists:stories,id',
-            'action' => 'required|string|in:' . implode(',', self::VALID_ACTIONS),
+            'action' => 'required|string|in:'.implode(',', self::VALID_ACTIONS),
             'metadata' => 'nullable|array',
         ];
     }
@@ -485,7 +498,7 @@ class MemberStoryInteraction extends Model
         return [
             'member_id.exists' => 'The selected member does not exist.',
             'story_id.exists' => 'The selected story does not exist.',
-            'action.in' => 'The action must be one of: ' . implode(', ', self::VALID_ACTIONS),
+            'action.in' => 'The action must be one of: '.implode(', ', self::VALID_ACTIONS),
         ];
     }
 
@@ -497,7 +510,7 @@ class MemberStoryInteraction extends Model
 
     public function getFilamentName(): string
     {
-        return $this->member?->name . ' → ' . $this->story?->title . ' (' . $this->action_label . ')';
+        return $this->member?->name.' → '.$this->story?->title.' ('.$this->action_label.')';
     }
 
     public function getActionBadgeColor(): string
@@ -520,7 +533,7 @@ class MemberStoryInteraction extends Model
             }
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             \Log::warning('Some bulk interactions failed', ['errors' => $errors]);
         }
 

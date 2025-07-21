@@ -2,14 +2,15 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Actions\Action;
+use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Support\Enums\ActionSize;
 use Illuminate\Support\Facades\Cache;
 
 class Dashboard extends BaseDashboard
 {
     protected static ?string $navigationIcon = 'heroicon-o-home';
+
     protected static string $view = 'filament.pages.organized-dashboard';
 
     protected function getHeaderActions(): array
@@ -44,22 +45,22 @@ class Dashboard extends BaseDashboard
                 \App\Filament\Widgets\StoryAnalyticsOverviewWidget::class,
                 \App\Filament\Widgets\MemberOverviewWidget::class,
             ],
-            
+
             // Section 2: Performance Charts (2 columns)
             [
                 \App\Filament\Widgets\StoryPerformanceChartWidget::class,
                 \App\Filament\Widgets\MemberEngagementWidget::class,
             ],
-            
+
             // Section 3: Quality & Activity (2 columns)
             [
                 \App\Filament\Widgets\ContentQualityWidget::class,
                 \App\Filament\Widgets\PublishingActivityWidget::class,
             ],
-            
+
             // Section 4: Data Tables (Full Width)
             \App\Filament\Widgets\TopStoriesTableWidget::class,
-            
+
             // Section 5: Member Insights (3 columns)
             [
                 \App\Filament\Widgets\ReadingInsightsWidget::class,
@@ -69,7 +70,7 @@ class Dashboard extends BaseDashboard
         ];
     }
 
-    public function getColumns(): int | string | array
+    public function getColumns(): int|string|array
     {
         return [
             'sm' => 1,

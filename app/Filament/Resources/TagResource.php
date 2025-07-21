@@ -6,17 +6,14 @@ use App\Filament\Resources\TagResource\Pages;
 use App\Models\Tag;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Resources\Resource;
 use Filament\Support\Enums\FontWeight;
+use Filament\Tables;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\DeleteBulkAction;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class TagResource extends Resource
@@ -145,7 +142,8 @@ class TagResource extends Resource
                     ->label('Avg Reading Time')
                     ->getStateUsing(function ($record) {
                         $avg = $record->stories()->avg('reading_time_minutes');
-                        return $avg ? round($avg, 1) . ' min' : 'N/A';
+
+                        return $avg ? round($avg, 1).' min' : 'N/A';
                     })
                     ->alignCenter()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -163,28 +161,24 @@ class TagResource extends Resource
             ->filters([
                 Filter::make('has_stories')
                     ->label('Has Stories')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('stories')
+                    ->query(fn (Builder $query): Builder => $query->whereHas('stories')
                     ),
 
                 Filter::make('has_active_stories')
                     ->label('Has Active Stories')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('stories', function (Builder $query) {
-                            $query->where('active', true);
-                        })
+                    ->query(fn (Builder $query): Builder => $query->whereHas('stories', function (Builder $query) {
+                        $query->where('active', true);
+                    })
                     ),
 
                 Filter::make('popular')
                     ->label('Popular (3+ Stories)')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('stories', null, '>=', 3)
+                    ->query(fn (Builder $query): Builder => $query->whereHas('stories', null, '>=', 3)
                     ),
 
                 Filter::make('highly_used')
                     ->label('Highly Used (10+ Stories)')
-                    ->query(fn (Builder $query): Builder => 
-                        $query->whereHas('stories', null, '>=', 10)
+                    ->query(fn (Builder $query): Builder => $query->whereHas('stories', null, '>=', 10)
                     ),
             ])
             ->actions([
@@ -197,6 +191,7 @@ class TagResource extends Resource
                         if ($storiesCount > 0) {
                             return "This tag is used in {$storiesCount} stories. Deleting it will remove the tag from all stories. Are you sure?";
                         }
+
                         return 'Are you sure you want to delete this tag?';
                     }),
             ])
@@ -257,7 +252,8 @@ class TagResource extends Resource
                                     ->label('Avg Reading Time')
                                     ->getStateUsing(function ($record) {
                                         $avg = $record->stories()->avg('reading_time_minutes');
-                                        return $avg ? round($avg, 1) . ' min' : 'N/A';
+
+                                        return $avg ? round($avg, 1).' min' : 'N/A';
                                     })
                                     ->badge()
                                     ->color('info'),
@@ -295,8 +291,7 @@ class TagResource extends Resource
                                             ->color('secondary'),
                                         Infolists\Components\TextEntry::make('status')
                                             ->badge()
-                                            ->color(fn (string $state): string => 
-                                                $state === 'Published' ? 'success' : 'gray'
+                                            ->color(fn (string $state): string => $state === 'Published' ? 'success' : 'gray'
                                             ),
                                         Infolists\Components\TextEntry::make('views'),
                                         Infolists\Components\TextEntry::make('created_at'),

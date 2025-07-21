@@ -2,18 +2,18 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\HasApiTokens;
 
 class Member extends Authenticatable implements FilamentUser
 {
@@ -22,7 +22,7 @@ class Member extends Authenticatable implements FilamentUser
     // ✅ IMPROVED: Better organized fillable fields with security considerations
     protected $fillable = [
         'name',
-        'email', 
+        'email',
         'phone',
         'avatar',
         'date_of_birth',
@@ -54,7 +54,7 @@ class Member extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         // Only allow verified, active members with admin role
-        return $this->status === 'active' && 
+        return $this->status === 'active' &&
                $this->email_verified_at !== null &&
                $this->hasRole('member_admin'); // If using Spatie Permission
     }
@@ -127,9 +127,10 @@ class Member extends Authenticatable implements FilamentUser
                 if ($this->avatar && Storage::disk('public')->exists("members/avatars/{$this->avatar}")) {
                     return Storage::disk('public')->url("members/avatars/{$this->avatar}");
                 }
-                
+
                 // ✅ IMPROVED: Fallback to Gravatar, then default
-                $gravatar = 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($this->email))) . '?d=mp&s=200';
+                $gravatar = 'https://www.gravatar.com/avatar/'.md5(strtolower(trim($this->email))).'?d=mp&s=200';
+
                 return $gravatar;
             }
         );
@@ -158,6 +159,7 @@ class Member extends Authenticatable implements FilamentUser
                 if (password_get_info($value)['algo'] === null) {
                     return Hash::make($value);
                 }
+
                 return $value;
             }
         );
@@ -226,13 +228,14 @@ class Member extends Authenticatable implements FilamentUser
         try {
             return $this->update([
                 'last_login_at' => now(),
-                'device_id' => $deviceId
+                'device_id' => $deviceId,
             ]);
         } catch (\Exception $e) {
             \Log::error('Failed to update last login', [
                 'member_id' => $this->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -264,8 +267,9 @@ class Member extends Authenticatable implements FilamentUser
                 'member_id' => $this->id,
                 'story_id' => $story->id,
                 'action' => $action,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -298,8 +302,9 @@ class Member extends Authenticatable implements FilamentUser
             \Log::error('Failed to update reading progress', [
                 'member_id' => $this->id,
                 'story_id' => $story->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -316,7 +321,7 @@ class Member extends Authenticatable implements FilamentUser
     {
         return cache()->remember("member_stats_{$this->id}", 300, function () {
             $readingHistory = $this->readingHistory();
-            
+
             return [
                 'total_views' => $this->storyViews()->count(),
                 'unique_stories_viewed' => $this->storyViews()->distinct('story_id')->count(),
@@ -339,7 +344,7 @@ class Member extends Authenticatable implements FilamentUser
     {
         $started = $this->readingHistory()->where('reading_progress', '>', 0)->count();
         $completed = $this->readingHistory()->where('reading_progress', 100)->count();
-        
+
         return $started > 0 ? round(($completed / $started) * 100, 2) : 0;
     }
 
@@ -361,7 +366,7 @@ class Member extends Authenticatable implements FilamentUser
             ->where('last_read_at', '>=', now()->subDays(30))
             ->orderBy('last_read_at', 'desc')
             ->pluck('last_read_at')
-            ->map(fn($date) => $date->format('Y-m-d'))
+            ->map(fn ($date) => $date->format('Y-m-d'))
             ->unique()
             ->values();
 
@@ -395,6 +400,4 @@ class Member extends Authenticatable implements FilamentUser
     {
         return $this->avatar_url;
     }
-
-
 }

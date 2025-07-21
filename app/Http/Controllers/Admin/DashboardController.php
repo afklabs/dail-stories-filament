@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
-use App\Models\{Story, StoryView, StoryRatingAggregate, StoryPublishingHistory, Member, MemberStoryRating, MemberStoryInteraction, Setting};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Cache, Log, DB, Validator, Gate};
-use Illuminate\Database\Eloquent\{ModelNotFoundException, Builder};
-use Carbon\Carbon;
 use App\Http\Controllers\Controller;
+use App\Models\Member;
+use App\Models\MemberStoryInteraction;
+use App\Models\MemberStoryRating;
+use App\Models\Story;
+use App\Models\StoryPublishingHistory;
+use App\Models\StoryRatingAggregate;
+use App\Models\StoryView;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,8 +31,8 @@ class DashboardController extends Controller
     public function getOverview(): JsonResponse
     {
         try {
-            $cacheKey = 'dashboard_overview_' . now()->format('Y-m-d-H-i');
-            
+            $cacheKey = 'dashboard_overview_'.now()->format('Y-m-d-H-i');
+
             $data = Cache::remember($cacheKey, 300, function (): array { // 5 minutes cache
                 return [
                     'key_metrics' => $this->getKeyMetrics(),
@@ -43,7 +49,7 @@ class DashboardController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Dashboard overview error', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to load dashboard data',
@@ -59,10 +65,10 @@ class DashboardController extends Controller
     {
         $days = $request->integer('days', 7);
         $days = min(max($days, 1), 90); // Limit between 1-90 days
-        
+
         try {
             $cacheKey = "dashboard_views_chart_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 900, function () use ($days): array { // 15 minutes cache
                 return StoryView::getAnalytics($days)['daily_trends'] ?? [];
             });
@@ -74,7 +80,7 @@ class DashboardController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Views chart error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load views chart data');
         }
     }
@@ -86,10 +92,10 @@ class DashboardController extends Controller
     {
         $days = $request->integer('days', 7);
         $days = min(max($days, 1), 30);
-        
+
         try {
             $cacheKey = "dashboard_publishing_chart_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 1800, function () use ($days): array { // 30 minutes cache
                 return StoryPublishingHistory::getPublishingAnalytics($days)['daily_activity'] ?? [];
             });
@@ -101,7 +107,7 @@ class DashboardController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Publishing chart error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load publishing chart data');
         }
     }
@@ -112,8 +118,8 @@ class DashboardController extends Controller
     public function getTodayStats(): JsonResponse
     {
         try {
-            $cacheKey = 'dashboard_today_stats_' . now()->format('Y-m-d-H');
-            
+            $cacheKey = 'dashboard_today_stats_'.now()->format('Y-m-d-H');
+
             $data = Cache::remember($cacheKey, 300, function (): array {
                 $today = [
                     'views' => StoryView::today()->count(),
@@ -142,7 +148,7 @@ class DashboardController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Today stats error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load today statistics');
         }
     }
@@ -154,7 +160,7 @@ class DashboardController extends Controller
     {
         try {
             $cacheKey = 'member_analytics_overview';
-            
+
             $data = Cache::remember($cacheKey, 1800, function (): array {
                 return [
                     'total_members' => Member::count(),
@@ -171,7 +177,7 @@ class DashboardController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Member analytics error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load member analytics');
         }
     }
@@ -213,15 +219,15 @@ class DashboardController extends Controller
         $lastWeek = [
             'views' => StoryView::whereBetween('viewed_at', [
                 now()->subWeeks(2)->startOfWeek(),
-                now()->subWeek()->endOfWeek()
+                now()->subWeek()->endOfWeek(),
             ])->count(),
             'ratings' => MemberStoryRating::whereBetween('created_at', [
                 now()->subWeeks(2)->startOfWeek(),
-                now()->subWeek()->endOfWeek()
+                now()->subWeek()->endOfWeek(),
             ])->count(),
             'members' => Member::whereBetween('created_at', [
                 now()->subWeeks(2)->startOfWeek(),
-                now()->subWeek()->endOfWeek()
+                now()->subWeek()->endOfWeek(),
             ])->count(),
         ];
 
@@ -245,7 +251,7 @@ class DashboardController extends Controller
     private function calculateDailyGrowth(array $today, array $yesterday): array
     {
         $growth = [];
-        
+
         foreach ($today as $key => $value) {
             $yesterdayValue = $yesterday[$key] ?? 0;
             if ($yesterdayValue > 0) {
@@ -254,14 +260,14 @@ class DashboardController extends Controller
                 $growth[$key] = $value > 0 ? 100 : 0;
             }
         }
-        
+
         return $growth;
     }
 
     private function calculatePercentageGrowth(array $current, array $previous): array
     {
         $growth = [];
-        
+
         foreach ($current as $key => $value) {
             $previousValue = $previous[$key] ?? 0;
             if ($previousValue > 0) {
@@ -270,7 +276,7 @@ class DashboardController extends Controller
                 $growth[$key] = $value > 0 ? 100 : 0;
             }
         }
-        
+
         return $growth;
     }
 

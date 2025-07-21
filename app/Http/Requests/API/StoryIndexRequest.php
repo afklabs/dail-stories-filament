@@ -35,18 +35,16 @@ class StoryIndexRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         // Sanitize search input
-        if ($this->has('search'))
-        {
+        if ($this->has('search')) {
             $this->merge([
-                'search' => strip_tags(trim($this->search))
+                'search' => strip_tags(trim($this->search)),
             ]);
         }
 
         // Ensure integer values
-        if ($this->has('per_page'))
-        {
+        if ($this->has('per_page')) {
             $this->merge([
-                'per_page' => (int) $this->per_page
+                'per_page' => (int) $this->per_page,
             ]);
         }
     }

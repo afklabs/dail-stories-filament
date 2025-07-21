@@ -16,23 +16,19 @@ class SecureQueryBuilder
         // Sanitize search term
         $search = self::sanitizeSearchTerm($search);
 
-        if (empty($search))
-        {
+        if (empty($search)) {
             return $query;
         }
 
-        return $query->where(function ($q) use ($search, $columns)
-        {
-            foreach ($columns as $column)
-            {
+        return $query->where(function ($q) use ($search, $columns) {
+            foreach ($columns as $column) {
                 // Validate column name to prevent injection
-                if (!self::isValidColumnName($column))
-                {
+                if (! self::isValidColumnName($column)) {
                     continue;
                 }
 
                 // Use parameter binding for search
-                $q->orWhere($column, 'like', '%' . $search . '%');
+                $q->orWhere($column, 'like', '%'.$search.'%');
             }
         });
     }
@@ -47,8 +43,7 @@ class SecureQueryBuilder
 
         // Remove any potential SQL keywords
         $sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'UNION', 'EXEC', 'SCRIPT'];
-        foreach ($sqlKeywords as $keyword)
-        {
+        foreach ($sqlKeywords as $keyword) {
             $search = str_ireplace($keyword, '', $search);
         }
 
@@ -81,8 +76,7 @@ class SecureQueryBuilder
         $allowed = $allowedSorts[$modelClass] ?? ['id', 'created_at'];
 
         // Validate sort column
-        if (!$sortBy || !in_array($sortBy, $allowed))
-        {
+        if (! $sortBy || ! in_array($sortBy, $allowed)) {
             $sortBy = 'created_at';
         }
 
@@ -99,10 +93,8 @@ class SecureQueryBuilder
     {
         // Validate SQL doesn't contain dangerous keywords
         $dangerousKeywords = ['DROP', 'TRUNCATE', 'ALTER', 'GRANT', 'REVOKE'];
-        foreach ($dangerousKeywords as $keyword)
-        {
-            if (stripos($sql, $keyword) !== false)
-            {
+        foreach ($dangerousKeywords as $keyword) {
+            if (stripos($sql, $keyword) !== false) {
                 throw new \Exception('Dangerous SQL keyword detected');
             }
         }

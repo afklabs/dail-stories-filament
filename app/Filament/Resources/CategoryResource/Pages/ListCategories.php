@@ -4,8 +4,8 @@ namespace App\Filament\Resources\CategoryResource\Pages;
 
 use App\Filament\Resources\CategoryResource;
 use Filament\Actions;
-use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Components\Tab;
+use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListCategories extends ListRecords
@@ -23,7 +23,7 @@ class ListCategories extends ListRecords
     {
         return [
             'all' => Tab::make('All Categories'),
-            
+
             'with_stories' => Tab::make('With Stories')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('stories'))
                 ->badge(function () {
@@ -31,10 +31,9 @@ class ListCategories extends ListRecords
                 }),
 
             'active_stories' => Tab::make('With Active Stories')
-                ->modifyQueryUsing(fn (Builder $query) => 
-                    $query->whereHas('stories', function (Builder $q) {
-                        $q->where('active', true);
-                    })
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('stories', function (Builder $q) {
+                    $q->where('active', true);
+                })
                 )
                 ->badge(function () {
                     return static::getResource()::getModel()::whereHas('stories', function (Builder $q) {
@@ -49,9 +48,8 @@ class ListCategories extends ListRecords
                 }),
 
             'popular' => Tab::make('Popular')
-                ->modifyQueryUsing(fn (Builder $query) => 
-                    $query->withCount('stories')
-                          ->having('stories_count', '>=', 5)
+                ->modifyQueryUsing(fn (Builder $query) => $query->withCount('stories')
+                    ->having('stories_count', '>=', 5)
                 )
                 ->badge(function () {
                     return static::getResource()::getModel()::withCount('stories')

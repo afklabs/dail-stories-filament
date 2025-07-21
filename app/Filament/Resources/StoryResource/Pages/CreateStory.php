@@ -4,10 +4,8 @@ namespace App\Filament\Resources\StoryResource\Pages;
 
 use App\Filament\Resources\StoryResource;
 use App\Models\StoryPublishingHistory;
-use Filament\Actions;
-use Filament\Resources\Pages\CreateRecord;
 use Filament\Notifications\Notification;
-
+use Filament\Resources\Pages\CreateRecord;
 
 class CreateStory extends CreateRecord
 {
@@ -29,14 +27,14 @@ class CreateStory extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         // Auto-generate excerpt if not provided
-        if (empty($data['excerpt']) && !empty($data['content'])) {
+        if (empty($data['excerpt']) && ! empty($data['content'])) {
             $plainText = strip_tags($data['content']);
             $plainText = preg_replace('/\s+/', ' ', $plainText);
-            $data['excerpt'] = substr(trim($plainText), 0, 160) . '...';
+            $data['excerpt'] = substr(trim($plainText), 0, 160).'...';
         }
 
         // Auto-calculate reading time
-        if (!empty($data['content'])) {
+        if (! empty($data['content'])) {
             $wordCount = str_word_count(strip_tags($data['content']));
             $data['reading_time_minutes'] = max(1, ceil($wordCount / 200));
         }
@@ -53,7 +51,7 @@ class CreateStory extends CreateRecord
     {
         // Log the creation in publishing history
         $story = $this->record;
-        
+
         if ($story->active) {
             StoryPublishingHistory::create([
                 'story_id' => $story->id,

@@ -4,8 +4,8 @@ namespace App\Filament\Resources\StoryResource\Pages;
 
 use App\Filament\Resources\StoryResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\EditRecord;
 
 class EditStory extends EditRecord
 {
@@ -35,14 +35,14 @@ class EditStory extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         // Auto-generate excerpt if not provided
-        if (empty($data['excerpt']) && !empty($data['content'])) {
+        if (empty($data['excerpt']) && ! empty($data['content'])) {
             $plainText = strip_tags($data['content']);
             $plainText = preg_replace('/\s+/', ' ', $plainText);
-            $data['excerpt'] = substr(trim($plainText), 0, 160) . '...';
+            $data['excerpt'] = substr(trim($plainText), 0, 160).'...';
         }
 
         // Auto-calculate reading time
-        if (!empty($data['content'])) {
+        if (! empty($data['content'])) {
             $wordCount = str_word_count(strip_tags($data['content']));
             $data['reading_time_minutes'] = max(1, ceil($wordCount / 200));
         }
@@ -55,9 +55,9 @@ class EditStory extends EditRecord
         // Log the update in publishing history
         $story = $this->record;
         $originalData = $this->record->getOriginal();
-        
+
         $changedFields = [];
-        
+
         // Check what publishing-related fields changed
         if ($originalData['active'] !== $story->active) {
             $changedFields[] = 'active';
@@ -70,13 +70,13 @@ class EditStory extends EditRecord
         }
 
         // Only log if publishing-related fields changed
-        if (!empty($changedFields)) {
+        if (! empty($changedFields)) {
             $action = 'updated';
-            
+
             // Determine specific action
-            if (!$originalData['active'] && $story->active) {
+            if (! $originalData['active'] && $story->active) {
                 $action = 'published';
-            } elseif ($originalData['active'] && !$story->active) {
+            } elseif ($originalData['active'] && ! $story->active) {
                 $action = 'unpublished';
             } elseif ($originalData['active'] && $story->active) {
                 $action = 'republished';

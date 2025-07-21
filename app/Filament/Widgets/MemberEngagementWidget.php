@@ -6,12 +6,13 @@ use App\Models\Member;
 use App\Models\MemberStoryInteraction;
 use App\Models\StoryView;
 use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Facades\DB;
 
 class MemberEngagementWidget extends ChartWidget
 {
     protected static string $color = 'info';
+
     protected static ?string $pollingInterval = '300s';
+
     protected static bool $isLazy = true;
 
     public function getHeading(): string
@@ -22,10 +23,10 @@ class MemberEngagementWidget extends ChartWidget
     protected function getData(): array
     {
         try {
-            $data = cache()->remember('dashboard.engagement_trends', 300, function() {
+            $data = cache()->remember('dashboard.engagement_trends', 300, function () {
                 return collect(range(6, 0))->map(function ($daysBack) {
                     $date = now()->subDays($daysBack);
-                    
+
                     return [
                         'date' => $date->format('M j'),
                         'views' => StoryView::whereDate('created_at', $date->toDateString())->count(),
@@ -66,7 +67,7 @@ class MemberEngagementWidget extends ChartWidget
             ];
         } catch (\Exception $e) {
             \Log::error('Dashboard Engagement widget error', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [

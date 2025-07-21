@@ -5,10 +5,17 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller; // ✅ ADDED: Missing import
-use App\Models\{Story, StoryView, Member, MemberStoryInteraction, MemberStoryRating, StoryCategory};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Cache, Log, DB};
+use App\Models\Member;
+use App\Models\MemberStoryInteraction;
+use App\Models\MemberStoryRating;
+use App\Models\Story;
+use App\Models\StoryCategory;
+use App\Models\StoryView;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,9 +33,9 @@ class AnalyticsController extends BaseAdminController
         try {
             $days = $request->integer('days', 30);
             $days = min(max($days, 1), 90); // Limit between 1-90 days
-            
+
             $cacheKey = "analytics_overview_{$days}";
-            
+
             $data = Cache::remember($cacheKey, 1800, function () use ($days): array {
                 return [
                     'stories' => $this->getStoryAnalytics($days),
@@ -42,7 +49,7 @@ class AnalyticsController extends BaseAdminController
             return $this->successResponse($data, 'Analytics overview retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Analytics overview error', ['error' => $e->getMessage()]);
-            
+
             return $this->errorResponse('Failed to load analytics overview');
         }
     }
@@ -53,7 +60,7 @@ class AnalyticsController extends BaseAdminController
     private function getStoryAnalytics(int $days): array
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         return [
             'total_stories' => Story::count(),
             'published_stories' => Story::where('status', 'published')->count(),
@@ -72,7 +79,7 @@ class AnalyticsController extends BaseAdminController
     private function getMemberAnalytics(int $days): array
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         return [
             'total_members' => Member::count(),
             'active_members' => Member::where('status', 'active')->count(),
@@ -91,7 +98,7 @@ class AnalyticsController extends BaseAdminController
     private function getEngagementAnalytics(int $days): array
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         return [
             'total_interactions' => MemberStoryInteraction::where('created_at', '>=', $dateFrom)->count(),
             'total_ratings' => MemberStoryRating::where('created_at', '>=', $dateFrom)->count(),
@@ -107,7 +114,7 @@ class AnalyticsController extends BaseAdminController
     private function getPerformanceMetrics(int $days): array
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         return [
             'daily_active_users' => $this->getDailyActiveUsers($days),
             'retention_rate' => $this->calculateRetentionRate($days),
@@ -134,10 +141,10 @@ class AnalyticsController extends BaseAdminController
     private function calculateEngagementRate(int $days): float
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         $totalViews = StoryView::where('created_at', '>=', $dateFrom)->count();
         $totalInteractions = MemberStoryInteraction::where('created_at', '>=', $dateFrom)->count();
-        
+
         return $totalViews > 0 ? round(($totalInteractions / $totalViews) * 100, 2) : 0;
     }
 
@@ -147,16 +154,16 @@ class AnalyticsController extends BaseAdminController
     private function getTopCategories(int $days): array
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         return StoryCategory::withCount(['stories' => function ($query) use ($dateFrom) {
             $query->whereHas('views', function ($viewQuery) use ($dateFrom) {
                 $viewQuery->where('created_at', '>=', $dateFrom);
             });
         }])
-        ->orderBy('stories_count', 'desc')
-        ->limit(5)
-        ->get(['name', 'stories_count'])
-        ->toArray();
+            ->orderBy('stories_count', 'desc')
+            ->limit(5)
+            ->get(['name', 'stories_count'])
+            ->toArray();
     }
 
     /**
@@ -165,7 +172,7 @@ class AnalyticsController extends BaseAdminController
     private function getDailyActiveUsers(int $days): int
     {
         $dateFrom = Carbon::now()->subDays($days);
-        
+
         return StoryView::where('created_at', '>=', $dateFrom)
             ->distinct('member_id')
             ->count('member_id');

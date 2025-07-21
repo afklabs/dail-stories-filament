@@ -10,27 +10,28 @@ use Illuminate\Support\Number;
 class MemberOverviewWidget extends BaseWidget
 {
     protected static ?string $pollingInterval = '120s';
+
     protected static bool $isLazy = true;
 
     protected function getStats(): array
     {
         try {
             // Cache expensive queries for 5 minutes
-            $totalMembers = cache()->remember('dashboard.total_members', 300, function() {
+            $totalMembers = cache()->remember('dashboard.total_members', 300, function () {
                 return Member::count();
             });
 
-            $activeMembers = cache()->remember('dashboard.active_members', 300, function() {
+            $activeMembers = cache()->remember('dashboard.active_members', 300, function () {
                 return Member::active()->count();
             });
 
-            $newMembersThisMonth = cache()->remember('dashboard.new_members_month', 300, function() {
+            $newMembersThisMonth = cache()->remember('dashboard.new_members_month', 300, function () {
                 return Member::whereMonth('created_at', now()->month)
                     ->whereYear('created_at', now()->year)
                     ->count();
             });
 
-            $verifiedMembers = cache()->remember('dashboard.verified_members', 300, function() {
+            $verifiedMembers = cache()->remember('dashboard.verified_members', 300, function () {
                 return Member::verified()->count();
             });
 
@@ -38,8 +39,8 @@ class MemberOverviewWidget extends BaseWidget
             $lastMonthNew = Member::whereMonth('created_at', now()->subMonth()->month)
                 ->whereYear('created_at', now()->subMonth()->year)
                 ->count();
-            
-            $growthTrend = $lastMonthNew > 0 
+
+            $growthTrend = $lastMonthNew > 0
                 ? round((($newMembersThisMonth - $lastMonthNew) / $lastMonthNew) * 100, 1)
                 : 0;
 
@@ -50,7 +51,7 @@ class MemberOverviewWidget extends BaseWidget
                     ->color('primary'),
 
                 Stat::make('Active Members', Number::format($activeMembers))
-                    ->description($this->getPercentage($activeMembers, $totalMembers) . '% of total')
+                    ->description($this->getPercentage($activeMembers, $totalMembers).'% of total')
                     ->descriptionIcon('heroicon-m-check-circle')
                     ->color('success'),
 
@@ -60,16 +61,16 @@ class MemberOverviewWidget extends BaseWidget
                     ->color($growthTrend >= 0 ? 'success' : 'danger'),
 
                 Stat::make('Email Verified', Number::format($verifiedMembers))
-                    ->description($this->getPercentage($verifiedMembers, $totalMembers) . '% verified')
+                    ->description($this->getPercentage($verifiedMembers, $totalMembers).'% verified')
                     ->descriptionIcon('heroicon-m-shield-check')
                     ->color('warning'),
             ];
         } catch (\Exception $e) {
             \Log::error('Dashboard MemberOverview widget error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return [
                 Stat::make('Error', 'Data unavailable')
                     ->description('Please refresh the page')
@@ -81,7 +82,10 @@ class MemberOverviewWidget extends BaseWidget
 
     private function getPercentage(int $part, int $total): string
     {
-        if ($total === 0) return '0';
+        if ($total === 0) {
+            return '0';
+        }
+
         return (string) round(($part / $total) * 100, 1);
     }
 }

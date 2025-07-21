@@ -2,17 +2,17 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 
 class User extends Authenticatable implements FilamentUser
 {
-    use HasApiTokens, HasFactory, Notifiable, HasRoles;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -56,10 +56,10 @@ class User extends Authenticatable implements FilamentUser
         // For now, allow all authenticated users to access the admin panel
         // Later we can add role-based restrictions here
         return true;
-        
+
         // Alternative: Restrict to users with specific role
         // return $this->hasRole('super_admin') || $this->hasRole('admin');
-        
+
         // Alternative: Restrict to users with any permission
         // return $this->hasAnyPermission([
         //     'view_any_story', 'view_any_member', 'view_any_category'

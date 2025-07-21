@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -13,8 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         // Create new ratings table
-        Schema::create('member_story_ratings', function (Blueprint $table)
-        {
+        Schema::create('member_story_ratings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('member_id')->constrained('members')->onDelete('cascade');
             $table->foreignId('story_id')->constrained('stories')->onDelete('cascade');

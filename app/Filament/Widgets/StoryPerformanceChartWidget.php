@@ -2,16 +2,21 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\MemberStoryInteraction;
+use App\Models\StoryView;
 use Filament\Widgets\ChartWidget;
-use App\Models\{StoryView, MemberStoryInteraction};
 use Illuminate\Support\Facades\Cache;
 
 class StoryPerformanceChartWidget extends ChartWidget
 {
     protected static ?string $heading = 'Story Performance (Last 30 Days)';
+
     protected static string $color = 'info';
+
     protected static ?string $pollingInterval = '300s';
+
     protected static bool $isLazy = true;
+
     protected static ?int $sort = 2;
 
     protected function getData(): array
@@ -20,7 +25,7 @@ class StoryPerformanceChartWidget extends ChartWidget
             return Cache::remember('story_performance_chart', 300, function () {
                 $data = collect(range(29, 0))->map(function ($daysBack) {
                     $date = now()->subDays($daysBack);
-                    
+
                     return [
                         'date' => $date->format('M j'),
                         'views' => StoryView::whereDate('viewed_at', $date->toDateString())->count(),
@@ -72,7 +77,7 @@ class StoryPerformanceChartWidget extends ChartWidget
                         'backgroundColor' => 'rgba(239, 68, 68, 0.1)',
                     ],
                 ],
-                'labels' => collect(range(29, 0))->map(fn($d) => now()->subDays($d)->format('M j'))->toArray(),
+                'labels' => collect(range(29, 0))->map(fn ($d) => now()->subDays($d)->format('M j'))->toArray(),
             ];
         }
     }

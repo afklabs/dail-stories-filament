@@ -4,8 +4,8 @@ namespace App\Filament\Resources\StoryResource\Pages;
 
 use App\Filament\Resources\StoryResource;
 use Filament\Actions;
-use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Components\Tab;
+use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListStories extends ListRecords
@@ -23,7 +23,7 @@ class ListStories extends ListRecords
     {
         return [
             'all' => Tab::make('All Stories'),
-            
+
             'published' => Tab::make('Published')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('active', true)
                     ->where(function ($q) {

@@ -2,9 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Tag;
-use Illuminate\Support\Str;
+use Illuminate\Database\Seeder;
 
 class TagSeeder extends Seeder
 {
@@ -43,8 +42,7 @@ class TagSeeder extends Seeder
             'covid-19',
         ];
 
-        foreach ($tags as $tagName)
-        {
+        foreach ($tags as $tagName) {
             Tag::create([
                 'name' => ucfirst(str_replace('-', ' ', $tagName)),
                 'slug' => $tagName,

@@ -17,7 +17,9 @@ class ApiVersionMiddleware
      * Supported API versions
      */
     private const SUPPORTED_VERSIONS = ['v1'];
+
     private const DEFAULT_VERSION = 'v1';
+
     private const MINIMUM_SUPPORTED_VERSION = 'v1';
 
     /**
@@ -29,7 +31,7 @@ class ApiVersionMiddleware
         $version = $this->extractApiVersion($request);
 
         // Validate version
-        if (!$this->isVersionSupported($version)) {
+        if (! $this->isVersionSupported($version)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unsupported API version',
@@ -45,6 +47,7 @@ class ApiVersionMiddleware
             $response = $next($request);
             $response->headers->set('X-API-Deprecated', 'true');
             $response->headers->set('X-API-Sunset-Date', '2025-12-31'); // Example
+
             return $response;
         }
 

@@ -3,7 +3,7 @@
         'name' => 'laravel/laravel',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '04a9e0cbe4c83978e62bc33bc10e5b5c50e9e36f',
+        'reference' => 'dd512108deddf233da76b9a1edaa2a4f39ecc63a',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -310,6 +310,15 @@
             'aliases' => array(),
             'dev_requirement' => true,
         ),
+        'iamcal/sql-parser' => array(
+            'pretty_version' => 'v0.6',
+            'version' => '0.6.0.0',
+            'reference' => '947083e2dca211a6f12fb1beb67a01e387de9b62',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../iamcal/sql-parser',
+            'aliases' => array(),
+            'dev_requirement' => true,
+        ),
         'illuminate/auth' => array(
             'dev_requirement' => false,
             'replaced' => array(
@@ -550,7 +559,7 @@
         'laravel/laravel' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '04a9e0cbe4c83978e62bc33bc10e5b5c50e9e36f',
+            'reference' => 'dd512108deddf233da76b9a1edaa2a4f39ecc63a',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -796,6 +805,15 @@
             'aliases' => array(),
             'dev_requirement' => true,
         ),
+        'nunomaduro/larastan' => array(
+            'pretty_version' => 'v3.6.0',
+            'version' => '3.6.0.0',
+            'reference' => '6431d010dd383a9279eb8874a76ddb571738564a',
+            'type' => 'phpstan-extension',
+            'install_path' => __DIR__ . '/../nunomaduro/larastan',
+            'aliases' => array(),
+            'dev_requirement' => true,
+        ),
         'nunomaduro/termwind' => array(
             'pretty_version' => 'v2.3.1',
             'version' => '2.3.1.0',
@@ -840,6 +858,15 @@
             'install_path' => __DIR__ . '/../phpoption/phpoption',
             'aliases' => array(),
             'dev_requirement' => false,
+        ),
+        'phpstan/phpstan' => array(
+            'pretty_version' => '2.1.18',
+            'version' => '2.1.18.0',
+            'reference' => 'ee1f390b7a70cdf74a2b737e554f68afea885db7',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../phpstan/phpstan',
+            'aliases' => array(),
+            'dev_requirement' => true,
         ),
         'phpunit/php-code-coverage' => array(
             'pretty_version' => '11.0.10',

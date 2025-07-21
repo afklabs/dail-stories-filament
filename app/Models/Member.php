@@ -88,10 +88,21 @@ class Member extends Authenticatable implements FilamentUser
         return $this->hasMany(MemberStoryInteraction::class);
     }
 
-    public function readingHistory(): HasMany
+        public function readingHistory()
     {
         return $this->hasMany(MemberReadingHistory::class);
     }
+
+    public function storyInteractions()
+    {
+        return $this->hasMany(MemberStoryInteraction::class);
+    }
+
+    public function storyRatings()
+    {
+        return $this->hasMany(MemberStoryRating::class);
+    }
+
 
     // ✅ IMPROVED: More efficient relationship queries with proper pivot selection
     public function likedStories(): BelongsToMany

@@ -33,8 +33,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->favicon(asset('favicon.ico'))
             ->brandName('Daily Stories Admin')
-            ->brandLogo(asset('images/logo.png'))
-            ->brandLogoHeight('2rem')
+            //->brandLogo(asset('images/logo.png'))
+            //->brandLogoHeight('1.5rem')
             ->maxContentWidth('7xl') // This constrains the content width
             ->sidebarCollapsibleOnDesktop() // Optional: Make sidebar collapsible
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')

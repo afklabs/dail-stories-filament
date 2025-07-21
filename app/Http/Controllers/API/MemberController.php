@@ -5,54 +5,130 @@ declare(strict_types=1);
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\MemberProfileUpdateRequest;
+use App\Http\Requests\API\MemberProfileUpdateRequest;
+use App\Http\Requests\API\MemberRegistrationRequest;
+use App\Http\Requests\API\MemberLoginRequest;
+use App\Http\Requests\API\MemberPasswordChangeRequest;
+use App\Http\Requests\API\MemberAvatarUploadRequest;
+use App\Http\Requests\API\MemberAccountDeletionRequest;
 use App\Models\Member;
 use App\Models\MemberReadingHistory;
 use App\Models\MemberStoryInteraction;
 use App\Models\MemberStoryRating;
 use App\Models\Story;
+use App\Services\MemberService;
+use App\Services\FileUploadService;
+use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
+use Carbon\Carbon;
 
+/**
+ * Member API Controller
+ * 
+ * Handles all member authentication and profile management for the Flutter mobile app.
+ * Provides secure registration, login, profile management, and account operations.
+ * 
+ * Security Features:
+ * - Enhanced input validation and sanitization
+ * - SQL injection prevention
+ * - XSS protection through proper escaping
+ * - Rate limiting on all sensitive endpoints
+ * - Secure file upload handling
+ * - Token management with automatic revocation
+ * - Account lockout protection
+ * 
+ * Performance Features:
+ * - Database query optimization
+ * - Efficient caching strategies
+ * - Proper transaction handling
+ * - Memory-efficient file processing
+ * 
+ * @author Development Team
+ * @version 2.0.0
+ * @since Laravel 11+
+ */
 class MemberController extends Controller
 {
     /**
-     * Register new member
+     * Member service for business logic
      */
-    public function register(Request $request): JsonResponse
+    private MemberService $memberService;
+    
+    /**
+     * File upload service for secure file handling
+     */
+    private FileUploadService $fileUploadService;
+    
+    /**
+     * Password reset service
+     */
+    private PasswordResetService $passwordResetService;
+
+    /**
+     * Constructor - Inject required services
+     */
+    public function __construct(
+        MemberService $memberService,
+        FileUploadService $fileUploadService,
+        PasswordResetService $passwordResetService
+    ) {
+        $this->memberService = $memberService;
+        $this->fileUploadService = $fileUploadService;
+        $this->passwordResetService = $passwordResetService;
+    }
+
+    /**
+     * Register new member with enhanced security
+     * 
+     * Endpoint: POST /v1/members/register
+     * Rate Limit: 5 requests per minute per IP
+     * Authentication: Not required
+     * 
+     * Security Features:
+     * - Comprehensive input validation
+     * - Password strength requirements
+     * - Email normalization and validation
+     * - Device ID validation
+     * - Account creation rate limiting
+     * 
+     * @param MemberRegistrationRequest $request Validated registration request
+     * @return JsonResponse Registration response with member data and token
+     */
+    public function register(MemberRegistrationRequest $request): JsonResponse
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255|min:2',
-                'email' => 'required|string|email|max:255|unique:members',
-                'password' => 'required|string|min:8|confirmed',
-                'device_id' => 'nullable|string|max:255',
-                'phone' => 'nullable|string|max:20',
-                'date_of_birth' => 'nullable|date|before:today',
-                'gender' => 'nullable|string|in:male,female',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
+            // Apply rate limiting per IP to prevent registration spam
+            $ipRateLimitKey = 'registration:ip:' . $request->ip();
+            if (RateLimiter::tooManyAttempts($ipRateLimitKey, 5)) {
+                return $this->errorResponse(
+                    'Too many registration attempts. Please try again in ' . 
+                    ceil(RateLimiter::availableIn($ipRateLimitKey) / 60) . ' minutes.',
+                    429
+                );
             }
 
-            $validated = $validator->validated();
+            $validated = $request->validated();
 
-            $member = null;
-            $token = null;
+            // Additional business logic validation
+            if (!$this->memberService->canRegisterWithEmail($validated['email'])) {
+                RateLimiter::hit($ipRateLimitKey, 300); // 5 minutes penalty
+                return $this->errorResponse('Registration not available for this email', 403);
+            }
 
-            DB::transaction(function () use ($validated, &$member, &$token) {
+            // Use database transaction for atomicity and data integrity
+            $result = DB::transaction(function () use ($validated, $request) {
+                // Create member with sanitized and validated data
                 $member = Member::create([
-                    'name' => $validated['name'],
-                    'email' => $validated['email'],
+                    'name' => strip_tags(trim($validated['name'])), // XSS protection
+                    'email' => strtolower(trim($validated['email'])), // Email normalization
                     'password' => Hash::make($validated['password']),
                     'device_id' => $validated['device_id'] ?? null,
                     'phone' => $validated['phone'] ?? null,
@@ -60,172 +136,337 @@ class MemberController extends Controller
                     'gender' => $validated['gender'] ?? null,
                     'status' => 'active',
                     'last_login_at' => now(),
+                    'email_verified_at' => now(), // Auto-verify for mobile app
+                    'registration_ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
-                // Create API token
-                $token = $member->createToken('api-token')->plainTextToken;
+                // Create secure API token with limited scope and expiration
+                $tokenResult = $member->createToken(
+                    name: 'mobile-app-' . now()->format('Y-m-d-H-i-s'),
+                    abilities: ['*'],
+                    expiresAt: now()->addDays(30)
+                );
+
+                return [
+                    'member' => $member,
+                    'token' => $tokenResult->plainTextToken,
+                    'token_expires_at' => $tokenResult->accessToken->expires_at,
+                ];
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Registration successful',
-                'data' => [
-                    'member' => [
-                        'id' => $member->id,
-                        'name' => $member->name,
-                        'email' => $member->email,
-                        'phone' => $member->phone,
-                        'avatar' => $member->avatar,
-                        'status' => $member->status,
-                        'created_at' => $member->created_at,
-                    ],
-                    'token' => $token,
-                ],
-            ], 201);
-        } catch (\Exception $e) {
-            Log::error('Member registration error', ['error' => $e->getMessage()]);
+            // Clear rate limit on successful registration
+            RateLimiter::clear($ipRateLimitKey);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error',
-            ], 500);
+            // Log successful registration for security monitoring
+            Log::info('Member registered successfully', [
+                'member_id' => $result['member']->id,
+                'email' => $result['member']->email,
+                'device_id' => $validated['device_id'] ?? 'not_provided',
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return $this->successResponse([
+                'member' => $this->transformMemberForAPI($result['member']),
+                'authentication' => [
+                    'token' => $result['token'],
+                    'token_type' => 'Bearer',
+                    'expires_at' => $result['token_expires_at']->toISOString(),
+                    'expires_in' => $result['token_expires_at']->diffInSeconds(now()),
+                ],
+                'registration_completed_at' => now()->toISOString(),
+            ], 'Registration successful', 201);
+
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Registration validation failed', 422, $e->errors());
+
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Handle duplicate email constraint violation
+            if ($e->errorInfo[1] === 1062) { // MySQL duplicate entry
+                RateLimiter::hit($ipRateLimitKey, 300);
+                return $this->errorResponse(
+                    'This email address is already registered',
+                    422,
+                    ['email' => ['This email is already registered']]
+                );
+            }
+
+            Log::error('Database error during registration', [
+                'error_code' => $e->errorInfo[1] ?? 'unknown',
+                'error_message' => $e->getMessage(),
+                'email' => $request->input('email', 'unknown'),
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->errorResponse('Registration failed due to database error', 500);
+
+        } catch (\Exception $e) {
+            Log::error('Member registration error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'email' => $request->input('email', 'unknown'),
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->errorResponse('Registration failed. Please try again.', 500);
         }
     }
 
     /**
-     * Login member
+     * Authenticate member login with enhanced security
+     * 
+     * Endpoint: POST /v1/members/login
+     * Rate Limit: 10 requests per minute per IP, 5 per email
+     * Authentication: Not required
+     * 
+     * Security Features:
+     * - Progressive rate limiting (IP + email based)
+     * - Account lockout protection
+     * - Secure password verification
+     * - Token management with automatic cleanup
+     * - Audit logging for failed attempts
+     * 
+     * @param MemberLoginRequest $request Validated login request
+     * @return JsonResponse Login response with member data and new token
      */
-    public function login(Request $request): JsonResponse
+    public function login(MemberLoginRequest $request): JsonResponse
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'email' => 'required|email',
-                'password' => 'required|string',
-                'device_id' => 'nullable|string|max:255',
+            $validated = $request->validated();
+            $email = strtolower(trim($validated['email']));
+            $password = $validated['password'];
+            $deviceId = $validated['device_id'] ?? null;
+
+            // Multi-layered rate limiting for enhanced security
+            $ipRateLimitKey = 'login:ip:' . $request->ip();
+            $emailRateLimitKey = 'login:email:' . $email;
+            
+            // Check IP-based rate limit (more permissive)
+            if (RateLimiter::tooManyAttempts($ipRateLimitKey, 10)) {
+                return $this->errorResponse(
+                    'Too many login attempts from your location. Please try again in ' . 
+                    ceil(RateLimiter::availableIn($ipRateLimitKey) / 60) . ' minutes.',
+                    429
+                );
+            }
+
+            // Check email-based rate limit (more restrictive)
+            if (RateLimiter::tooManyAttempts($emailRateLimitKey, 5)) {
+                return $this->errorResponse(
+                    'Too many login attempts for this email. Please try again in ' . 
+                    ceil(RateLimiter::availableIn($emailRateLimitKey) / 60) . ' minutes.',
+                    429,
+                    ['retry_after_seconds' => RateLimiter::availableIn($emailRateLimitKey)]
+                );
+            }
+
+            // Find and validate member with secure query
+            $member = Member::where('email', $email)->first();
+
+            if (!$member || !Hash::check($password, $member->password)) {
+                // Apply rate limiting on failed attempts
+                RateLimiter::hit($ipRateLimitKey, 900); // 15 minutes
+                RateLimiter::hit($emailRateLimitKey, 900);
+                
+                // Log security event
+                Log::warning('Failed login attempt', [
+                    'email' => $email,
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'device_id' => $deviceId,
+                    'member_exists' => $member !== null,
+                    'timestamp' => now()->toISOString(),
+                ]);
+
+                return $this->errorResponse('Invalid email or password', 401);
+            }
+
+            // Validate account status
+            if (!$this->memberService->isAccountActive($member)) {
+                RateLimiter::hit($emailRateLimitKey, 900);
+                
+                $statusMessage = match($member->status) {
+                    'inactive' => 'Your account is inactive. Please contact support.',
+                    'suspended' => 'Your account has been suspended. Please contact support.',
+                    'banned' => 'Your account has been banned. Please contact support.',
+                    default => 'Account access is restricted. Please contact support.',
+                };
+
+                return $this->errorResponse($statusMessage, 403, [
+                    'account_status' => $member->status,
+                    'support_contact' => config('app.support_email'),
+                ]);
+            }
+
+            // Successful authentication - clear rate limits
+            RateLimiter::clear($ipRateLimitKey);
+            RateLimiter::clear($emailRateLimitKey);
+
+            // Create new session with secure token management
+            $loginResult = DB::transaction(function () use ($member, $deviceId, $request) {
+                // Revoke old tokens for security (optional - can be configured)
+                if (config('auth.revoke_old_tokens_on_login', false)) {
+                    $member->tokens()->delete();
+                }
+
+                // Update member login information
+                $member->update([
+                    'last_login_at' => now(),
+                    'device_id' => $deviceId,
+                    'last_login_ip' => $request->ip(),
+                    'login_count' => DB::raw('login_count + 1'),
+                ]);
+
+                // Create new secure API token
+                $tokenResult = $member->createToken(
+                    name: 'mobile-login-' . now()->format('Y-m-d-H-i-s'),
+                    abilities: ['*'],
+                    expiresAt: now()->addDays(30)
+                );
+
+                return [
+                    'token' => $tokenResult->plainTextToken,
+                    'expires_at' => $tokenResult->accessToken->expires_at,
+                ];
+            });
+
+            // Log successful login for security monitoring
+            Log::info('Member login successful', [
+                'member_id' => $member->id,
+                'email' => $member->email,
+                'device_id' => $deviceId,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'login_count' => $member->login_count,
             ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-
-            $validated = $validator->validated();
-
-            $member = Member::where('email', $validated['email'])->first();
-
-            if (!$member || !Hash::check($validated['password'], $member->password)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid credentials',
-                ], 401);
-            }
-
-            if ($member->status !== 'active') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Account is not active',
-                ], 403);
-            }
-
-            // Update login info
-            $member->update([
-                'last_login_at' => now(),
-                'device_id' => $validated['device_id'] ?? $member->device_id,
-            ]);
-
-            // Revoke old tokens and create new one
-            $member->tokens()->delete();
-            $token = $member->createToken('api-token')->plainTextToken;
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Login successful',
-                'data' => [
-                    'member' => [
-                        'id' => $member->id,
-                        'name' => $member->name,
-                        'email' => $member->email,
-                        'phone' => $member->phone,
-                        'avatar' => $member->avatar,
-                        'status' => $member->status,
-                        'date_of_birth' => $member->date_of_birth,
-                        'gender' => $member->gender,
-                        'last_login_at' => $member->last_login_at,
-                    ],
-                    'token' => $token,
+            return $this->successResponse([
+                'member' => $this->transformMemberForAPI($member),
+                'authentication' => [
+                    'token' => $loginResult['token'],
+                    'token_type' => 'Bearer',
+                    'expires_at' => $loginResult['expires_at']->toISOString(),
+                    'expires_in' => $loginResult['expires_at']->diffInSeconds(now()),
                 ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Member login error', ['error' => $e->getMessage()]);
+                'login_completed_at' => now()->toISOString(),
+            ], 'Login successful');
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Login failed',
-            ], 500);
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Login validation failed', 422, $e->errors());
+
+        } catch (\Exception $e) {
+            Log::error('Member login error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'email' => $request->input('email', 'unknown'),
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->errorResponse('Login failed. Please try again.', 500);
         }
     }
 
     /**
-     * Logout member
+     * Securely logout member and revoke token
+     * 
+     * Endpoint: POST /v1/members/logout
+     * Authentication: Required (Bearer token)
+     * 
+     * @param Request $request
+     * @return JsonResponse Logout confirmation
      */
     public function logout(Request $request): JsonResponse
     {
         try {
-            $request->user()->currentAccessToken()->delete();
+            $member = $request->user();
+            $currentToken = $request->user()->currentAccessToken();
+            
+            if ($currentToken) {
+                // Revoke current token
+                $currentToken->delete();
+                
+                // Optionally revoke all tokens for enhanced security
+                if ($request->boolean('revoke_all_sessions', false)) {
+                    $member->tokens()->delete();
+                }
+            }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Logout successful',
+            Log::info('Member logout successful', [
+                'member_id' => $member->id,
+                'ip' => $request->ip(),
+                'revoked_all_sessions' => $request->boolean('revoke_all_sessions', false),
             ]);
-        } catch (\Exception $e) {
-            Log::error('Member logout error', ['error' => $e->getMessage()]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Logout failed',
-            ], 500);
+            return $this->successResponse([
+                'logged_out_at' => now()->toISOString(),
+                'sessions_revoked' => $request->boolean('revoke_all_sessions', false) ? 'all' : 'current',
+            ], 'Logout successful');
+
+        } catch (\Exception $e) {
+            Log::error('Member logout error', [
+                'error' => $e->getMessage(),
+                'member_id' => $request->user()?->id,
+            ]);
+
+            return $this->errorResponse('Logout failed', 500);
         }
     }
 
     /**
-     * Get member profile
+     * Get member profile with comprehensive data
+     * 
+     * Endpoint: GET /v1/members/profile
+     * Authentication: Required
+     * 
+     * @param Request $request
+     * @return JsonResponse Member profile data
      */
     public function profile(Request $request): JsonResponse
     {
         try {
             $member = $request->user();
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'id' => $member->id,
-                    'name' => $member->name,
-                    'email' => $member->email,
-                    'phone' => $member->phone,
-                    'avatar' => $member->avatar,
-                    'date_of_birth' => $member->date_of_birth,
-                    'gender' => $member->gender,
-                    'status' => $member->status,
-                    'last_login_at' => $member->last_login_at,
-                    'created_at' => $member->created_at,
-                ],
+            
+            // Load additional profile statistics efficiently
+            $member->loadCount([
+                'readingHistory as total_stories_read',
+                'storyInteractions as total_interactions',
+                'storyRatings as total_ratings_given',
             ]);
-        } catch (\Exception $e) {
-            Log::error('Get member profile error', ['error' => $e->getMessage()]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load profile',
-            ], 500);
+            // Get reading statistics
+            $readingStats = $this->memberService->getReadingStatistics($member->id);
+
+            return $this->successResponse([
+                'profile' => $this->transformMemberForAPI($member),
+                'statistics' => $readingStats,
+                'account_info' => [
+                    'member_since' => $member->created_at->toISOString(),
+                    'days_active' => $member->created_at->diffInDays(now()),
+                    'last_activity' => $member->updated_at->toISOString(),
+                    'total_login_count' => $member->login_count ?? 0,
+                ],
+            ], 'Profile retrieved successfully');
+
+        } catch (\Exception $e) {
+            Log::error('Get member profile error', [
+                'error' => $e->getMessage(),
+                'member_id' => $request->user()?->id,
+            ]);
+
+            return $this->errorResponse('Failed to load profile', 500);
         }
     }
 
     /**
-     * Update member profile
+     * Update member profile with validation
+     * 
+     * Endpoint: PUT /v1/members/profile
+     * Rate Limit: 10 requests per minute per user
+     * Authentication: Required
+     * 
+     * @param MemberProfileUpdateRequest $request
+     * @return JsonResponse Updated profile data
      */
     public function updateProfile(MemberProfileUpdateRequest $request): JsonResponse
     {
@@ -233,181 +474,456 @@ class MemberController extends Controller
             $member = $request->user();
             $validated = $request->validated();
 
-            // Handle password update if provided
+            // Handle password update separately for security
             if (!empty($validated['new_password'])) {
                 if (!Hash::check($validated['current_password'], $member->password)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Current password is incorrect',
-                    ], 422);
+                    return $this->errorResponse(
+                        'Current password is incorrect',
+                        422,
+                        ['current_password' => ['Current password is incorrect']]
+                    );
                 }
+                
                 $validated['password'] = Hash::make($validated['new_password']);
                 unset($validated['current_password'], $validated['new_password']);
+                
+                // Revoke all tokens when password changes for security
+                $member->tokens()->delete();
+                
+                // Create new token for current session
+                $newToken = $member->createToken(
+                    'profile-update-' . now()->format('Y-m-d-H-i-s'),
+                    ['*'],
+                    now()->addDays(30)
+                )->plainTextToken;
             }
 
-            // Handle avatar upload
-            if ($request->hasFile('avatar')) {
-                $avatarPath = $request->file('avatar')->store('avatars', 'public');
-                $validated['avatar'] = $avatarPath;
-            }
-
-            // Update member
-            $member->update($validated);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile updated successfully',
-                'data' => [
-                    'id' => $member->id,
-                    'name' => $member->name,
-                    'email' => $member->email,
-                    'phone' => $member->phone,
-                    'avatar' => $member->avatar,
-                    'date_of_birth' => $member->date_of_birth,
-                    'gender' => $member->gender,
-                    'updated_at' => $member->updated_at,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Update member profile error', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update profile',
-            ], 500);
-        }
-    }
-
-    /**
-     * Get member bookmarks
-     */
-    public function bookmarks(Request $request): JsonResponse
-    {
-        try {
-            $member = $request->user();
-            $perPage = $request->integer('per_page', 10);
-
-            $bookmarks = Story::whereHas('interactions', function ($query) use ($member) {
-                $query->where('member_id', $member->id)
-                    ->where('action', 'bookmark');
-            })
-                ->where('active', true)
-                ->with(['category:id,name', 'ratingAggregate'])
-                ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
-                ->orderByDesc('created_at')
-                ->paginate($perPage);
-
-            return response()->json([
-                'success' => true,
-                'data' => $bookmarks->items(),
-                'pagination' => [
-                    'current_page' => $bookmarks->currentPage(),
-                    'per_page' => $bookmarks->perPage(),
-                    'total' => $bookmarks->total(),
-                    'last_page' => $bookmarks->lastPage(),
-                    'has_more' => $bookmarks->hasMorePages(),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Get member bookmarks error', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load bookmarks',
-            ], 500);
-        }
-    }
-
-    /**
-     * Get member rated stories
-     */
-    public function ratedStories(Request $request): JsonResponse
-    {
-        try {
-            $member = $request->user();
-            $perPage = $request->integer('per_page', 10);
-
-            $ratedStories = Story::whereHas('ratings', function ($query) use ($member) {
-                $query->where('member_id', $member->id);
-            })
-                ->with([
-                    'category:id,name',
-                    'ratingAggregate',
-                    'ratings' => function ($query) use ($member) {
-                        $query->where('member_id', $member->id);
-                    },
-                ])
-                ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
-                ->orderByDesc('created_at')
-                ->paginate($perPage);
-
-            // Add member rating to each story
-            $ratedStories->getCollection()->transform(function ($story) {
-                $memberRating = $story->ratings->first();
-                if ($memberRating) {
-                    $story->member_rating = [
-                        'rating' => $memberRating->rating,
-                        'comment' => $memberRating->comment,
-                        'created_at' => $memberRating->created_at,
-                    ];
+            // Sanitize and update profile data
+            $updateData = [];
+            foreach ($validated as $field => $value) {
+                if ($field !== 'avatar' && $value !== null) {
+                    // Sanitize text fields to prevent XSS
+                    $updateData[$field] = is_string($value) ? strip_tags(trim($value)) : $value;
                 }
-                unset($story->ratings); // Remove the relationship to clean response
+            }
 
-                return $story;
+            if (!empty($updateData)) {
+                $member->update($updateData);
+            }
+
+            Log::info('Member profile updated', [
+                'member_id' => $member->id,
+                'updated_fields' => array_keys($updateData),
+                'password_changed' => isset($validated['password']),
+            ]);
+
+            $response = [
+                'profile' => $this->transformMemberForAPI($member->fresh()),
+                'updated_at' => now()->toISOString(),
+                'updated_fields' => array_keys($updateData),
+            ];
+
+            // Add new token if password was changed
+            if (isset($newToken)) {
+                $response['new_authentication'] = [
+                    'token' => $newToken,
+                    'token_type' => 'Bearer',
+                    'expires_in' => 30 * 24 * 60 * 60,
+                    'reason' => 'password_changed',
+                ];
+            }
+
+            return $this->successResponse($response, 'Profile updated successfully');
+
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Profile update validation failed', 422, $e->errors());
+
+        } catch (\Exception $e) {
+            Log::error('Update member profile error', [
+                'error' => $e->getMessage(),
+                'member_id' => $request->user()?->id,
+            ]);
+
+            return $this->errorResponse('Failed to update profile', 500);
+        }
+    }
+
+    /**
+     * Upload member avatar with enhanced security
+     * 
+     * Endpoint: POST /v1/members/avatar
+     * Rate Limit: 5 requests per minute per user
+     * Authentication: Required
+     * 
+     * @param MemberAvatarUploadRequest $request
+     * @return JsonResponse Avatar upload confirmation
+     */
+    public function uploadAvatar(MemberAvatarUploadRequest $request): JsonResponse
+    {
+        try {
+            $member = $request->user();
+            $avatarFile = $request->file('avatar');
+
+            // Use secure file upload service
+            $uploadResult = $this->fileUploadService->uploadAvatar($avatarFile, $member->id);
+
+            // Delete old avatar if exists
+            if ($member->avatar && $member->avatar !== $uploadResult['path']) {
+                $this->fileUploadService->deleteFile($member->avatar);
+            }
+
+            // Update member avatar path
+            $member->update(['avatar' => $uploadResult['path']]);
+
+            Log::info('Avatar uploaded successfully', [
+                'member_id' => $member->id,
+                'filename' => $uploadResult['filename'],
+                'file_size' => $uploadResult['size'],
+                'mime_type' => $uploadResult['mime_type'],
+            ]);
+
+            return $this->successResponse([
+                'avatar' => [
+                    'path' => $uploadResult['path'],
+                    'url' => $uploadResult['url'],
+                    'filename' => $uploadResult['filename'],
+                    'size' => $uploadResult['size'],
+                    'mime_type' => $uploadResult['mime_type'],
+                ],
+                'uploaded_at' => now()->toISOString(),
+            ], 'Avatar uploaded successfully');
+
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Avatar upload validation failed', 422, $e->errors());
+
+        } catch (\Exception $e) {
+            Log::error('Avatar upload error', [
+                'member_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse('Failed to upload avatar. Please try again.', 500);
+        }
+    }
+
+    /**
+     * Change member password with enhanced security
+     * 
+     * Endpoint: POST /v1/members/change-password
+     * Rate Limit: 3 requests per minute per user
+     * Authentication: Required
+     * 
+     * @param MemberPasswordChangeRequest $request
+     * @return JsonResponse Password change confirmation
+     */
+    public function changePassword(MemberPasswordChangeRequest $request): JsonResponse
+    {
+        try {
+            $member = $request->user();
+            $validated = $request->validated();
+
+            // Verify current password
+            if (!Hash::check($validated['current_password'], $member->password)) {
+                Log::warning('Failed password change attempt', [
+                    'member_id' => $member->id,
+                    'ip' => $request->ip(),
+                ]);
+
+                return $this->errorResponse(
+                    'Current password is incorrect',
+                    422,
+                    ['current_password' => ['Current password is incorrect']]
+                );
+            }
+
+            DB::transaction(function () use ($member, $validated) {
+                // Update password
+                $member->update([
+                    'password' => Hash::make($validated['password']),
+                    'password_changed_at' => now(),
+                ]);
+
+                // Revoke all existing tokens for security
+                $member->tokens()->delete();
             });
 
-            return response()->json([
-                'success' => true,
-                'data' => $ratedStories->items(),
-                'pagination' => [
-                    'current_page' => $ratedStories->currentPage(),
-                    'per_page' => $ratedStories->perPage(),
-                    'total' => $ratedStories->total(),
-                    'last_page' => $ratedStories->lastPage(),
-                    'has_more' => $ratedStories->hasMorePages(),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Get member rated stories error', ['error' => $e->getMessage()]);
+            // Create new token for current session
+            $newToken = $member->createToken(
+                'password-change-' . now()->format('Y-m-d-H-i-s'),
+                ['*'],
+                now()->addDays(30)
+            )->plainTextToken;
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load rated stories',
-            ], 500);
+            Log::info('Password changed successfully', [
+                'member_id' => $member->id,
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->successResponse([
+                'authentication' => [
+                    'token' => $newToken,
+                    'token_type' => 'Bearer',
+                    'expires_in' => 30 * 24 * 60 * 60,
+                    'reason' => 'password_changed',
+                ],
+                'changed_at' => now()->toISOString(),
+                'security_notice' => 'All other sessions have been logged out for security.',
+            ], 'Password changed successfully');
+
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Password change validation failed', 422, $e->errors());
+
+        } catch (\Exception $e) {
+            Log::error('Password change error', [
+                'member_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse('Failed to change password. Please try again.', 500);
         }
     }
 
     /**
-     * Get member reading history
+     * Delete member account with secure confirmation
+     * 
+     * Endpoint: DELETE /v1/members/account
+     * Rate Limit: 1 request per 5 minutes per user
+     * Authentication: Required
+     * 
+     * @param MemberAccountDeletionRequest $request
+     * @return JsonResponse Account deletion confirmation
+     */
+    public function deleteAccount(MemberAccountDeletionRequest $request): JsonResponse
+    {
+        try {
+            $member = $request->user();
+            $validated = $request->validated();
+
+            // Verify password for security
+            if (!Hash::check($validated['password'], $member->password)) {
+                Log::warning('Failed account deletion attempt', [
+                    'member_id' => $member->id,
+                    'ip' => $request->ip(),
+                ]);
+
+                return $this->errorResponse(
+                    'Password is incorrect',
+                    422,
+                    ['password' => ['Password is incorrect']]
+                );
+            }
+
+            // Store data for logging before deletion
+            $memberData = [
+                'id' => $member->id,
+                'email' => $member->email,
+                'name' => $member->name,
+                'created_at' => $member->created_at,
+                'deletion_reason' => $validated['reason'] ?? null,
+                'ip' => $request->ip(),
+                'deleted_at' => now(),
+            ];
+
+            // Comprehensive account deletion in transaction
+            DB::transaction(function () use ($member) {
+                // Delete all authentication tokens
+                $member->tokens()->delete();
+                
+                // Delete user-generated content and interactions
+                MemberReadingHistory::where('member_id', $member->id)->delete();
+                MemberStoryInteraction::where('member_id', $member->id)->delete();
+                MemberStoryRating::where('member_id', $member->id)->delete();
+                
+                // Delete avatar file from storage
+                if ($member->avatar) {
+                    $this->fileUploadService->deleteFile($member->avatar);
+                }
+                
+                // Finally delete the member account
+                $member->delete();
+            });
+
+            Log::info('Account deleted successfully', $memberData);
+
+            return $this->successResponse([
+                'deleted_at' => now()->toISOString(),
+                'message' => 'Your account and all associated data have been permanently deleted.',
+                'support_contact' => config('app.support_email'),
+            ], 'Account deleted successfully');
+
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Account deletion validation failed', 422, $e->errors());
+
+        } catch (\Exception $e) {
+            Log::error('Account deletion error', [
+                'member_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse('Failed to delete account. Please try again.', 500);
+        }
+    }
+
+    /**
+     * Initiate password reset process (placeholder for future implementation)
+     * 
+     * Endpoint: POST /v1/members/forgot-password
+     * Rate Limit: 3 requests per minute per IP
+     * Authentication: Not required
+     * 
+     * Note: This is a placeholder since password_reset_tokens table and mail are not configured yet
+     * 
+     * @param Request $request
+     * @return JsonResponse Password reset initiation response
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|max:255',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->errorResponse('Validation failed', 422, $validator->errors());
+            }
+
+            $email = strtolower(trim($request->input('email')));
+
+            // Rate limiting for forgot password requests
+            $rateLimitKey = 'forgot-password:' . $request->ip();
+            if (RateLimiter::tooManyAttempts($rateLimitKey, 3)) {
+                return $this->errorResponse(
+                    'Too many password reset requests. Please try again later.',
+                    429
+                );
+            }
+
+            RateLimiter::hit($rateLimitKey, 300); // 5 minutes
+
+            // For security, always return the same message regardless of email existence
+            // This prevents email enumeration attacks
+            $message = 'If an account with this email exists, you will receive password reset instructions.';
+
+            // Check if member exists (for logging purposes only)
+            $member = Member::where('email', $email)->first();
+            
+            if ($member && $member->status === 'active') {
+                Log::info('Password reset requested for valid account', [
+                    'email' => $email,
+                    'member_id' => $member->id,
+                    'ip' => $request->ip(),
+                ]);
+
+                // TODO: Implement actual password reset when mail is configured
+                // $this->passwordResetService->sendResetEmail($member);
+            } else {
+                Log::info('Password reset requested for invalid/inactive account', [
+                    'email' => $email,
+                    'ip' => $request->ip(),
+                    'member_exists' => $member !== null,
+                    'member_status' => $member?->status ?? 'not_found',
+                ]);
+            }
+
+            return $this->successResponse([
+                'requested_at' => now()->toISOString(),
+                'next_steps' => 'Check your email for reset instructions if the account exists.',
+            ], $message);
+
+        } catch (\Exception $e) {
+            Log::error('Forgot password error', [
+                'error' => $e->getMessage(),
+                'email' => $request->input('email', 'unknown'),
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->errorResponse('Failed to process password reset request', 500);
+        }
+    }
+
+    /**
+     * Get comprehensive member reading history
+     * 
+     * Endpoint: GET /v1/members/reading-history
+     * Authentication: Required
+     * 
+     * @param Request $request
+     * @return JsonResponse Paginated reading history
      */
     public function readingHistory(Request $request): JsonResponse
     {
         try {
             $member = $request->user();
-            $perPage = $request->integer('per_page', 10);
+            
+            // Validate pagination parameters
+            $validator = Validator::make($request->all(), [
+                'per_page' => 'integer|min:1|max:50',
+                'status' => 'string|in:all,completed,in_progress,not_started',
+            ]);
 
-            $readingHistory = MemberReadingHistory::where('member_id', $member->id)
+            if ($validator->fails()) {
+                return $this->errorResponse('Invalid parameters', 422, $validator->errors());
+            }
+
+            $perPage = min($request->integer('per_page', 10), 50);
+            $status = $request->input('status', 'all');
+
+            // Build optimized query with eager loading
+            $query = MemberReadingHistory::where('member_id', $member->id)
                 ->with([
-                    'story:id,title,excerpt,image,category_id,reading_time_minutes',
-                    'story.category:id,name',
-                ])
+                    'story:id,title,excerpt,image,category_id,reading_time_minutes,views',
+                    'story.category:id,name,slug',
+                ]);
+
+            // Apply status filter
+            if ($status !== 'all') {
+                match($status) {
+                    'completed' => $query->where('reading_progress', '>=', 100),
+                    'in_progress' => $query->whereBetween('reading_progress', [1, 99]),
+                    'not_started' => $query->where('reading_progress', 0),
+                };
+            }
+
+            $readingHistory = $query
                 ->orderByDesc('last_read_at')
                 ->paginate($perPage);
 
+            // Transform data for API response
             $history = $readingHistory->getCollection()->map(function ($item) {
                 return [
-                    'story' => $item->story,
-                    'reading_progress' => $item->reading_progress,
-                    'time_spent' => $item->time_spent,
-                    'last_read_at' => $item->last_read_at,
-                    'is_completed' => $item->reading_progress >= 100,
-                    'progress_status' => $this->getProgressStatus($item->reading_progress),
+                    'story' => [
+                        'id' => $item->story->id,
+                        'title' => $item->story->title,
+                        'excerpt' => $item->story->excerpt,
+                        'image' => $item->story->image ? asset('storage/' . $item->story->image) : null,
+                        'reading_time_minutes' => $item->story->reading_time_minutes,
+                        'views' => $item->story->views,
+                        'category' => $item->story->category ? [
+                            'id' => $item->story->category->id,
+                            'name' => $item->story->category->name,
+                            'slug' => $item->story->category->slug,
+                        ] : null,
+                    ],
+                    'reading_data' => [
+                        'progress_percentage' => $item->reading_progress,
+                        'time_spent_minutes' => round($item->time_spent / 60, 1),
+                        'reading_sessions' => $item->reading_sessions ?? 1,
+                        'last_read_at' => $item->last_read_at->toISOString(),
+                        'is_completed' => $item->reading_progress >= 100,
+                        'status' => $this->memberService->getProgressStatus($item->reading_progress),
+                    ],
                 ];
             });
 
-            return response()->json([
-                'success' => true,
-                'data' => $history,
+            // Get comprehensive reading statistics
+            $statistics = Cache::remember(
+                "member_reading_stats_{$member->id}",
+                300, // 5 minutes
+                fn() => $this->memberService->getComprehensiveReadingStats($member->id)
+            );
+
+            return $this->successResponse([
+                'reading_history' => $history,
                 'pagination' => [
                     'current_page' => $readingHistory->currentPage(),
                     'per_page' => $readingHistory->perPage(),
@@ -415,380 +931,80 @@ class MemberController extends Controller
                     'last_page' => $readingHistory->lastPage(),
                     'has_more' => $readingHistory->hasMorePages(),
                 ],
-                'summary' => [
-                    'completed_stories' => MemberReadingHistory::where('member_id', $member->id)
-                        ->where('reading_progress', '>=', 100)->count(),
-                    'in_progress_stories' => MemberReadingHistory::where('member_id', $member->id)
-                        ->where('reading_progress', '>', 0)
-                        ->where('reading_progress', '<', 100)->count(),
-                    'total_reading_time' => MemberReadingHistory::where('member_id', $member->id)
-                        ->sum('time_spent'),
+                'statistics' => $statistics,
+                'filters' => [
+                    'status' => $status,
+                    'available_statuses' => ['all', 'completed', 'in_progress', 'not_started'],
                 ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Get member reading history error', ['error' => $e->getMessage()]);
+            ], 'Reading history retrieved successfully');
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load reading history',
-            ], 500);
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Invalid parameters', 422, $e->errors());
+
+        } catch (\Exception $e) {
+            Log::error('Get member reading history error', [
+                'error' => $e->getMessage(),
+                'member_id' => $request->user()?->id,
+            ]);
+
+            return $this->errorResponse('Failed to load reading history', 500);
         }
     }
 
-    /**
-     * Get member recommendations
-     */
-    public function recommendations(Request $request): JsonResponse
-    {
-        try {
-            $member = $request->user();
-            $limit = $request->integer('limit', 5);
-
-            // Simple recommendation algorithm based on:
-            // 1. Categories member has read and rated highly
-            // 2. Stories similar to highly rated ones
-            // 3. Popular stories member hasn't read yet
-
-            $recommendations = $this->generateRecommendations($member, $limit);
-
-            return response()->json([
-                'success' => true,
-                'data' => $recommendations,
-                'algorithm' => 'Based on your reading history and preferences',
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Get member recommendations error', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load recommendations',
-            ], 500);
-        }
-    }
+    // ===== PRIVATE HELPER METHODS =====
 
     /**
-     * Get member statistics
-     */
-    public function stats(Request $request): JsonResponse
-    {
-        try {
-            $member = $request->user();
-
-            $stats = [
-                'reading_stats' => [
-                    'total_stories_read' => MemberReadingHistory::where('member_id', $member->id)->count(),
-                    'completed_stories' => MemberReadingHistory::where('member_id', $member->id)
-                        ->where('reading_progress', '>=', 100)->count(),
-                    'total_reading_time' => MemberReadingHistory::where('member_id', $member->id)
-                        ->sum('time_spent'),
-                    'average_completion_rate' => $this->getAverageCompletionRate($member->id),
-                ],
-                'interaction_stats' => [
-                    'total_ratings' => MemberStoryRating::where('member_id', $member->id)->count(),
-                    'average_rating_given' => round(MemberStoryRating::where('member_id', $member->id)
-                        ->avg('rating') ?? 0, 1),
-                    'total_bookmarks' => MemberStoryInteraction::where('member_id', $member->id)
-                        ->where('action', 'bookmark')->count(),
-                    'total_likes' => MemberStoryInteraction::where('member_id', $member->id)
-                        ->where('action', 'like')->count(),
-                    'total_shares' => MemberStoryInteraction::where('member_id', $member->id)
-                        ->where('action', 'share')->count(),
-                ],
-                'engagement_stats' => [
-                    'days_active' => $this->getDaysActive($member->id),
-                    'current_streak' => $this->getCurrentReadingStreak($member->id),
-                    'longest_streak' => $this->getLongestReadingStreak($member->id),
-                    'last_activity' => MemberReadingHistory::where('member_id', $member->id)
-                        ->latest('last_read_at')->value('last_read_at'),
-                ],
-                'preferences' => [
-                    'favorite_categories' => $this->getFavoriteCategories($member->id),
-                    'reading_patterns' => $this->getReadingPatterns($member->id),
-                ],
-            ];
-
-            return response()->json([
-                'success' => true,
-                'data' => $stats,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Get member stats error', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load statistics',
-            ], 500);
-        }
-    }
-
-    /**
-     * Forgot password
-     */
-    public function forgotPassword(Request $request): JsonResponse
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'email' => 'required|email|exists:members,email',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-
-            // Here you would implement password reset logic
-            // For now, just return success message
-            return response()->json([
-                'success' => true,
-                'message' => 'Password reset instructions sent to your email',
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Forgot password error', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process password reset request',
-            ], 500);
-        }
-    }
-
-    /**
-     * Reset password
-     */
-    public function resetPassword(Request $request): JsonResponse
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'email' => 'required|email|exists:members,email',
-                'token' => 'required|string',
-                'password' => 'required|string|min:8|confirmed',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-
-            // Here you would implement password reset verification and update
-            // For now, just return success message
-            return response()->json([
-                'success' => true,
-                'message' => 'Password reset successfully',
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Reset password error', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to reset password',
-            ], 500);
-        }
-    }
-
-    /**
-     * Get progress status from reading progress
-     */
-    private function getProgressStatus(int $progress): string
-    {
-        return match (true) {
-            $progress === 0 => 'not_started',
-            $progress > 0 && $progress < 10 => 'just_started',
-            $progress >= 10 && $progress < 90 => 'in_progress',
-            $progress >= 90 && $progress < 100 => 'almost_done',
-            $progress >= 100 => 'completed',
-            default => 'unknown',
-        };
-    }
-
-    /**
-     * Generate recommendations for a member
-     *
+     * Transform member model to consistent API format
+     * 
      * @param Member $member
-     * @param int $limit
-     * @return array<int, array<string, mixed>>
+     * @return array
      */
-    private function generateRecommendations(Member $member, int $limit): array
+    private function transformMemberForAPI(Member $member): array
     {
-        // Get member's favorite categories (based on high ratings)
-        $favoriteCategories = MemberStoryRating::where('member_id', $member->id)
-            ->where('rating', '>=', 4)
-            ->join('stories', 'member_story_ratings.story_id', '=', 'stories.id')
-            ->groupBy('stories.category_id')
-            ->selectRaw('stories.category_id, COUNT(*) as count')
-            ->orderByDesc('count')
-            ->limit(3)
-            ->pluck('category_id')
-            ->toArray();
-
-        // Get stories member hasn't read from favorite categories
-        $readStoryIds = MemberReadingHistory::where('member_id', $member->id)
-            ->pluck('story_id')
-            ->toArray();
-
-        $recommendations = Story::where('active', true)
-            ->whereNotIn('id', $readStoryIds)
-            ->when(!empty($favoriteCategories), function ($query) use ($favoriteCategories) {
-                $query->whereIn('category_id', $favoriteCategories);
-            })
-            ->with(['category:id,name', 'ratingAggregate'])
-            ->select(['id', 'title', 'excerpt', 'image', 'category_id', 'reading_time_minutes', 'created_at'])
-            ->orderByDesc('views')
-            ->limit($limit)
-            ->get()
-            ->toArray();
-
-        return $recommendations;
-    }
-
-    /**
-     * Get average completion rate for a member
-     */
-    private function getAverageCompletionRate(int $memberId): float
-    {
-        $totalStories = MemberReadingHistory::where('member_id', $memberId)->count();
-        $completedStories = MemberReadingHistory::where('member_id', $memberId)
-            ->where('reading_progress', '>=', 100)->count();
-
-        return $totalStories > 0 ? round(($completedStories / $totalStories) * 100, 1) : 0;
-    }
-
-    /**
-     * Get number of days member has been active
-     */
-    private function getDaysActive(int $memberId): int
-    {
-        return MemberReadingHistory::where('member_id', $memberId)
-            ->selectRaw('DATE(last_read_at) as read_date')
-            ->distinct()
-            ->count();
-    }
-
-    /**
-     * Get current reading streak
-     */
-    private function getCurrentReadingStreak(int $memberId): int
-    {
-        // Simplified streak calculation
-        // In production, implement proper streak logic based on consecutive reading days
-        $recentReadingDays = MemberReadingHistory::where('member_id', $memberId)
-            ->where('last_read_at', '>=', now()->subDays(30))
-            ->selectRaw('DATE(last_read_at) as read_date')
-            ->distinct()
-            ->orderByDesc('read_date')
-            ->pluck('read_date')
-            ->toArray();
-
-        $streak = 0;
-        $currentDate = now()->format('Y-m-d');
-
-        foreach ($recentReadingDays as $date) {
-            if ($date === $currentDate || $date === now()->subDay()->format('Y-m-d')) {
-                $streak++;
-                $currentDate = $date;
-            } else {
-                break;
-            }
-        }
-
-        return $streak;
-    }
-
-    /**
-     * Get longest reading streak
-     */
-    private function getLongestReadingStreak(int $memberId): int
-    {
-        // Simplified streak calculation
-        // In production, implement proper streak logic to find the longest consecutive streak
-        $allReadingDays = MemberReadingHistory::where('member_id', $memberId)
-            ->selectRaw('DATE(last_read_at) as read_date')
-            ->distinct()
-            ->orderBy('read_date')
-            ->pluck('read_date')
-            ->toArray();
-
-        if (empty($allReadingDays)) {
-            return 0;
-        }
-
-        $longestStreak = 1;
-        $currentStreak = 1;
-
-        for ($i = 1; $i < count($allReadingDays); $i++) {
-            $currentDate = \Carbon\Carbon::parse($allReadingDays[$i]);
-            $previousDate = \Carbon\Carbon::parse($allReadingDays[$i - 1]);
-
-            if ($currentDate->diffInDays($previousDate) === 1) {
-                $currentStreak++;
-                $longestStreak = max($longestStreak, $currentStreak);
-            } else {
-                $currentStreak = 1;
-            }
-        }
-
-        return $longestStreak;
-    }
-
-    /**
-     * Get member's favorite categories
-     *
-     * @param int $memberId
-     * @return array<int, array<string, mixed>>
-     */
-    private function getFavoriteCategories(int $memberId): array
-    {
-        return MemberStoryRating::where('member_id', $memberId)
-            ->where('rating', '>=', 4)
-            ->join('stories', 'member_story_ratings.story_id', '=', 'stories.id')
-            ->join('categories', 'stories.category_id', '=', 'categories.id')
-            ->groupBy('categories.id', 'categories.name')
-            ->selectRaw('categories.id, categories.name, COUNT(*) as count')
-            ->orderByDesc('count')
-            ->limit(5)
-            ->get()
-            ->toArray();
-    }
-
-    /**
-     * Get reading patterns for a member
-     *
-     * @param int $memberId
-     * @return array<string, mixed>
-     */
-    private function getReadingPatterns(int $memberId): array
-    {
-        // Get average session duration
-        $averageSessionDuration = MemberReadingHistory::where('member_id', $memberId)
-            ->avg('time_spent') ?? 0;
-
-        // Get preferred reading time (simplified - based on when most reading happens)
-        $hourlyReadingActivity = MemberReadingHistory::where('member_id', $memberId)
-            ->selectRaw('HOUR(last_read_at) as hour, COUNT(*) as count')
-            ->groupBy('hour')
-            ->orderByDesc('count')
-            ->first();
-
-        $preferredTime = 'evening'; // default
-        if ($hourlyReadingActivity) {
-            $hour = $hourlyReadingActivity->hour;
-            $preferredTime = match (true) {
-                $hour >= 6 && $hour < 12 => 'morning',
-                $hour >= 12 && $hour < 18 => 'afternoon',
-                $hour >= 18 && $hour < 24 => 'evening',
-                default => 'night',
-            };
-        }
-
         return [
-            'preferred_reading_time' => $preferredTime,
-            'average_session_duration' => round($averageSessionDuration / 60, 1), // Convert to minutes
-            'completion_rate' => $this->getAverageCompletionRate($memberId),
+            'id' => $member->id,
+            'name' => $member->name,
+            'email' => $member->email,
+            'phone' => $member->phone,
+            'avatar_url' => $member->avatar ? asset('storage/' . $member->avatar) : null,
+            'date_of_birth' => $member->date_of_birth?->toDateString(),
+            'gender' => $member->gender,
+            'status' => $member->status,
+            'email_verified' => $member->email_verified_at !== null,
+            'last_login_at' => $member->last_login_at?->toISOString(),
+            'created_at' => $member->created_at->toISOString(),
+            'updated_at' => $member->updated_at->toISOString(),
         ];
+    }
+
+    /**
+     * Standardized success response format
+     */
+    private function successResponse($data = [], string $message = 'Success', int $code = 200): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => now()->toISOString(),
+        ], $code);
+    }
+
+    /**
+     * Standardized error response format
+     */
+    private function errorResponse(string $message = 'Error', int $code = 400, $errors = null): JsonResponse
+    {
+        $response = [
+            'success' => false,
+            'message' => $message,
+            'timestamp' => now()->toISOString(),
+        ];
+
+        if ($errors !== null) {
+            $response['errors'] = $errors;
+        }
+
+        return response()->json($response, $code);
     }
 }

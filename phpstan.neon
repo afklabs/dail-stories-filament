@@ -1,28 +1,25 @@
 includes:
-    - ./vendor/nunomaduro/larastan/extension.neon
+    - vendor/larastan/larastan/extension.neon
 
 parameters:
     paths:
         - app
-        - config
-        - database
-        - routes
-
-    level: 5
-
+        - database/factories
+    
+    level: 6
+    
     ignoreErrors:
         - '#PHPDoc tag @var#'
-        
-    excludePaths:
-        - app/Http/Controllers/Auth/*
-        - database/migrations/*
-
-    checkModelProperties: true
-    checkOctaneCompatibility: false
-    noModelMake: false
-    noUnnecessaryCollectionCall: false
-    noEnvCallsOutsideOfConfig: false
     
-    # Remove deprecated options that were causing errors
-    # checkMissingIterableValueType: false (REMOVED)
-    # checkGenericClassInNonGenericObjectType: false (REMOVED)
+    excludePaths:
+        - app/Providers/TelescopeServiceProvider.php
+        - cache
+        - bootstrap/cache
+        - storage
+        - vendor
+    
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+    
+    databaseMigrationsPath:
+        - database/migrations

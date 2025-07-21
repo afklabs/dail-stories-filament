@@ -29,10 +29,25 @@ class EditCategory extends EditRecord
         ];
     }
 
-    protected function getRedirectUrl(): string
-    {
-        return $this->getResource()::getUrl('index');
+protected function afterSave(): void
+{
+    $record = $this->getRecord();
+    
+    if ($record instanceof \App\Models\Category) {
+        $record->stories()->touch();
     }
+}
+
+protected function getRedirectUrl(): string
+{
+    $record = $this->getRecord();
+    
+    if ($record instanceof \App\Models\Category) {
+        return $this->getResource()::getUrl('view', ['record' => $record->id]);
+    }
+    
+    return $this->getResource()::getUrl('index');
+}
 
     protected function getSavedNotification(): ?Notification
     {

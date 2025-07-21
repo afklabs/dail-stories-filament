@@ -326,6 +326,35 @@ Route::prefix('system')->name('system.')->group(function (): void {
 
 /*
 |--------------------------------------------------------------------------
+| Settings
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('settings')->name('settings.')->group(function (): void {
+    // Story settings
+    Route::get('/story-defaults', [SettingsController::class, 'getStoryDefaults'])
+        ->name('story-defaults');
+        
+    Route::put('/story-defaults', [SettingsController::class, 'updateStoryDefaults'])
+        ->name('update-story-defaults');
+
+    // All settings
+    Route::get('/all', [SettingsController::class, 'getAllSettings'])
+        ->name('all');
+
+    // Cache management
+    Route::post('/clear-cache', [SettingsController::class, 'clearCache'])
+        ->name('clear-cache')
+        ->middleware('throttle:5,1');
+
+    // Performance metrics
+    Route::get('/performance-metrics', [SettingsController::class, 'getPerformanceMetrics'])
+        ->name('performance-metrics');
+});
+
+
+/*
+|--------------------------------------------------------------------------
 | API Documentation & Development Tools
 |--------------------------------------------------------------------------
 */

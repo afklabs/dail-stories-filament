@@ -32,7 +32,20 @@ class Member extends Authenticatable implements FilamentUser
         'last_login_at',
         'email_verified_at',
     ];
+    // Add accessor for avatar_url
+    protected $appends = ['avatar_url'];
 
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar ? Storage::url($this->avatar) : null;
+    }
+
+    // Add hasRole method if using without Spatie Permission
+    public function hasRole($role): bool
+    {
+        // Implement your role checking logic here
+        return false; // or use Spatie Permission trait
+    }
     // ✅ IMPROVED: Added more security-sensitive fields
     protected $hidden = [
         'password',

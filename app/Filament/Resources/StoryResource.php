@@ -6,7 +6,6 @@ use App\Filament\Resources\StoryResource\Pages;
 use App\Models\Story;
 use Filament\Forms;
 use Filament\Forms\Form;
-// ADD THIS LINE
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
@@ -235,6 +234,7 @@ class StoryResource extends Resource
                         'scheduled' => 'warning',
                         'expired' => 'danger',
                         'draft' => 'gray',
+                        default => 'secondary',
                     }),
 
                 Tables\Columns\TextColumn::make('views')
@@ -397,6 +397,7 @@ class StoryResource extends Resource
                                         'scheduled' => 'warning',
                                         'expired' => 'danger',
                                         'draft' => 'gray',
+                                        default => 'secondary',
                                     }),
 
                                 Infolists\Components\TextEntry::make('views')

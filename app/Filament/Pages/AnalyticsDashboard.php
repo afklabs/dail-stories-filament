@@ -8,6 +8,8 @@ use App\Models\Story;
 use App\Models\StoryPublishingHistory;
 use App\Models\StoryRatingAggregate;
 use App\Models\StoryView;
+use App\Models\Category;
+use App\Models\MemberReadingHistory;
 use Carbon\Carbon;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Grid;
@@ -28,13 +30,13 @@ class AnalyticsDashboard extends Page
 
     protected static string $view = 'filament.pages.analytics-dashboard';
 
-    public $selectedPeriod = '30';
+    public string $selectedPeriod = '30';
 
-    public $selectedStory = null;
+    public ?int $selectedStory = null;
 
-    public $dateFrom = null;
+    public ?string $dateFrom = null;
 
-    public $dateTo = null;
+    public ?string $dateTo = null;
 
     public function mount(): void
     {
@@ -82,7 +84,7 @@ class AnalyticsDashboard extends Page
             ]);
     }
 
-    protected function updateDateRange($period): void
+    protected function updateDateRange(string $period): void
     {
         if ($period !== 'custom') {
             $this->dateFrom = now()->subDays((int) $period)->toDateString();
@@ -90,11 +92,16 @@ class AnalyticsDashboard extends Page
         }
     }
 
+    /**
+     * Get overview metrics
+     *
+     * @return array<string, mixed>
+     */
     public function getOverviewMetrics(): array
     {
         $cacheKey = "analytics_overview_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -144,11 +151,16 @@ class AnalyticsDashboard extends Page
         return round($query->avg('average_rating') ?? 0, 2);
     }
 
+    /**
+     * Get view trends
+     *
+     * @return array<int, array<string, mixed>>
+     */
     public function getViewTrends(): array
     {
         $cacheKey = "view_trends_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -176,7 +188,9 @@ class AnalyticsDashboard extends Page
     }
 
     /**
-     * Get top stories - FIXED: Returns array instead of Collection
+     * Get top stories
+     *
+     * @return array<int, array<string, mixed>>
      */
     public function getTopStories(): array
     {
@@ -186,7 +200,7 @@ class AnalyticsDashboard extends Page
 
         $cacheKey = "top_stories_{$this->selectedPeriod}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -197,25 +211,30 @@ class AnalyticsDashboard extends Page
                 ->orderByDesc('period_views')
                 ->limit(10)
                 ->get()
-                ->map(function ($story) {
+                ->map(function (Story $story): array {
                     return [
                         'id' => $story->id,
                         'title' => $story->title,
-                        'category' => $story->category->name ?? 'Uncategorized',
-                        'views' => $story->period_views,
+                        'category' => $story->category?->name ?? 'Uncategorized',
+                        'views' => $story->period_views ?? 0,
                         'rating' => $story->ratingAggregate?->average_rating ?? 0,
                         'total_ratings' => $story->ratingAggregate?->total_ratings ?? 0,
                     ];
                 })
-                ->toArray(); // FIXED: Added toArray() to convert Collection to array
+                ->toArray();
         });
     }
 
+    /**
+     * Get engagement breakdown
+     *
+     * @return array<string, int>
+     */
     public function getEngagementBreakdown(): array
     {
         $cacheKey = "engagement_breakdown_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -232,11 +251,16 @@ class AnalyticsDashboard extends Page
         });
     }
 
+    /**
+     * Get device analytics
+     *
+     * @return array<string, mixed>
+     */
     public function getDeviceAnalytics(): array
     {
         $cacheKey = "device_analytics_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -262,6 +286,11 @@ class AnalyticsDashboard extends Page
         });
     }
 
+    /**
+     * Get publishing activity
+     *
+     * @return array<string, mixed>
+     */
     public function getPublishingActivity(): array
     {
         if ($this->selectedStory) {
@@ -270,7 +299,7 @@ class AnalyticsDashboard extends Page
 
         $cacheKey = "publishing_activity_{$this->selectedPeriod}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -283,6 +312,11 @@ class AnalyticsDashboard extends Page
         });
     }
 
+    /**
+     * Get story publishing history
+     *
+     * @return array<int, array<string, mixed>>
+     */
     protected function getStoryPublishingHistory(): array
     {
         return StoryPublishingHistory::where('story_id', $this->selectedStory)
@@ -290,10 +324,10 @@ class AnalyticsDashboard extends Page
             ->orderByDesc('created_at')
             ->limit(20)
             ->get()
-            ->map(function ($history) {
+            ->map(function (StoryPublishingHistory $history): array {
                 return [
                     'action' => $history->action,
-                    'user' => $history->user->name ?? 'System',
+                    'user' => $history->user?->name ?? 'System',
                     'date' => $history->created_at->format('M j, Y H:i'),
                     'notes' => $history->notes,
                 ];
@@ -301,11 +335,16 @@ class AnalyticsDashboard extends Page
             ->toArray();
     }
 
+    /**
+     * Get rating distribution
+     *
+     * @return array<int, int>
+     */
     public function getRatingDistribution(): array
     {
         $cacheKey = "rating_distribution_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $query = StoryRatingAggregate::query();
 
             if ($this->selectedStory) {
@@ -329,16 +368,21 @@ class AnalyticsDashboard extends Page
         });
     }
 
+    /**
+     * Get content quality metrics
+     *
+     * @return array<string, mixed>
+     */
     public function getContentQualityMetrics(): array
     {
         $cacheKey = "content_quality_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $query = StoryRatingAggregate::query();
 
             if ($this->selectedStory) {
                 $aggregate = $query->where('story_id', $this->selectedStory)->first();
-                if (! $aggregate) {
+                if (!$aggregate) {
                     return [];
                 }
 
@@ -366,7 +410,7 @@ class AnalyticsDashboard extends Page
         });
     }
 
-    protected function calculateQualityScore($aggregate): float
+    protected function calculateQualityScore(StoryRatingAggregate $aggregate): float
     {
         $ratingScore = ($aggregate->average_rating / 5) * 70; // 70% weight on rating
         $volumeScore = min(($aggregate->total_ratings / 50) * 30, 30); // 30% weight on volume, max at 50 ratings
@@ -375,13 +419,15 @@ class AnalyticsDashboard extends Page
     }
 
     /**
-     * Get member analytics - ADDED: New method that might be needed
+     * Get member analytics
+     *
+     * @return array<string, mixed>
      */
     public function getMemberAnalytics(): array
     {
         $cacheKey = "member_analytics_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
@@ -418,18 +464,20 @@ class AnalyticsDashboard extends Page
     }
 
     /**
-     * Get reading insights - ADDED: New method that might be needed
+     * Get reading insights
+     *
+     * @return array<string, mixed>
      */
     public function getReadingInsights(): array
     {
         $cacheKey = "reading_insights_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
             // Average reading time
-            $readingQuery = \App\Models\MemberReadingHistory::whereBetween('last_read_at', [$dateFrom, $dateTo]);
+            $readingQuery = MemberReadingHistory::whereBetween('last_read_at', [$dateFrom, $dateTo]);
 
             if ($this->selectedStory) {
                 $readingQuery->where('story_id', $this->selectedStory);
@@ -449,7 +497,9 @@ class AnalyticsDashboard extends Page
     }
 
     /**
-     * Get category performance - ADDED: New method that might be needed
+     * Get category performance
+     *
+     * @return array<int, array<string, mixed>>
      */
     public function getCategoryPerformance(): array
     {
@@ -459,29 +509,32 @@ class AnalyticsDashboard extends Page
 
         $cacheKey = "category_performance_{$this->selectedPeriod}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 
-            return \App\Models\Category::withCount([
+            return Category::withCount([
                 'stories as period_stories' => function ($q) use ($dateFrom, $dateTo) {
                     $q->whereBetween('created_at', [$dateFrom, $dateTo]);
                 },
-                'stories as total_views' => function ($q) use ($dateFrom, $dateTo) {
-                    $q->join('story_views', 'stories.id', '=', 'story_views.story_id')
-                        ->whereBetween('story_views.viewed_at', [$dateFrom, $dateTo]);
-                },
             ])
+                ->withSum([
+                    'stories as total_views' => function ($q) use ($dateFrom, $dateTo) {
+                        $q->whereHas('storyViews', function ($viewQuery) use ($dateFrom, $dateTo) {
+                            $viewQuery->whereBetween('viewed_at', [$dateFrom, $dateTo]);
+                        });
+                    },
+                ], 'views')
                 ->orderByDesc('total_views')
                 ->limit(10)
                 ->get()
-                ->map(function ($category) {
+                ->map(function (Category $category): array {
                     return [
                         'name' => $category->name,
-                        'stories_count' => $category->period_stories,
-                        'views' => $category->total_views,
-                        'avg_views_per_story' => $category->period_stories > 0
-                            ? round($category->total_views / $category->period_stories, 1)
+                        'stories_count' => $category->period_stories ?? 0,
+                        'views' => $category->total_views ?? 0,
+                        'avg_views_per_story' => ($category->period_stories ?? 0) > 0
+                            ? round(($category->total_views ?? 0) / $category->period_stories, 1)
                             : 0,
                     ];
                 })
@@ -490,13 +543,15 @@ class AnalyticsDashboard extends Page
     }
 
     /**
-     * Get time-based analytics - ADDED: New method that might be needed
+     * Get time-based analytics
+     *
+     * @return array<string, mixed>
      */
     public function getTimeBasedAnalytics(): array
     {
         $cacheKey = "time_based_analytics_{$this->selectedPeriod}_{$this->selectedStory}";
 
-        return Cache::remember($cacheKey, 600, function () {
+        return Cache::remember($cacheKey, 600, function (): array {
             $dateFrom = Carbon::parse($this->dateFrom);
             $dateTo = Carbon::parse($this->dateTo);
 

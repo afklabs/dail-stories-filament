@@ -33,6 +33,7 @@ use Illuminate\Support\Str;
  * @property string|null $image
  * @property Carbon $created_at
  * @property Carbon $updated_at
+ * 
  * @property-read Category|null $category
  * @property-read \Illuminate\Database\Eloquent\Collection|Tag[] $tags
  * @property-read \Illuminate\Database\Eloquent\Collection|StoryView[] $storyViews
@@ -50,39 +51,27 @@ class Story extends Model
      * Constants for cache and validation
      */
     private const CACHE_TTL = 3600; // 1 hour
-
     private const CACHE_TTL_SHORT = 300; // 5 minutes for stats
-
     private const CACHE_TTL_LONG = 1800; // 30 minutes for heavy analytics
-
     private const MIN_EXCERPT_LENGTH = 50;
-
     private const MAX_EXCERPT_LENGTH = 500;
-
     private const AVG_READING_SPEED = 200; // words per minute
-
     private const URGENT_HOURS = 1;
-
     private const WARNING_HOURS = 6;
 
     /**
      * Rating system constants
      */
     private const MIN_RATING = 1;
-
     private const MAX_RATING = 5;
-
     private const HIGH_RATING_THRESHOLD = 4;
-
     private const LOW_RATING_THRESHOLD = 2;
 
     /**
      * Interaction types
      */
     private const POSITIVE_INTERACTIONS = ['like', 'bookmark', 'share'];
-
     private const NEGATIVE_INTERACTIONS = ['dislike', 'report'];
-
     private const NEUTRAL_INTERACTIONS = ['view'];
 
     /**
@@ -259,7 +248,7 @@ class Story extends Model
      */
     public function getImageUrlAttribute(): ?string
     {
-        if (! $this->image) {
+        if (!$this->image) {
             return null;
         }
 
@@ -276,12 +265,11 @@ class Story extends Model
      */
     public function getExcerptAttribute(?string $value): string
     {
-        if (! empty($value)) {
+        if (!empty($value)) {
             return $value;
         }
         // Auto-generate from content
         $text = strip_tags($this->content ?? '');
-
         return Str::limit($text, 150);
     }
 
@@ -298,7 +286,7 @@ class Story extends Model
      */
     public function getStatusAttribute(): string
     {
-        if (! $this->active) {
+        if (!$this->active) {
             return 'draft';
         }
 
@@ -328,7 +316,7 @@ class Story extends Model
      */
     public function getRemainingTimeAttribute(): ?array
     {
-        if (! $this->active_until) {
+        if (!$this->active_until) {
             return null;
         }
 
@@ -372,8 +360,7 @@ class Story extends Model
     public function getFormattedReadingTimeAttribute(): string
     {
         $time = $this->calculated_reading_time_minutes;
-
-        return $time.' دقيقة قراءة';
+        return $time . ' دقيقة قراءة';
     }
 
     /**
@@ -384,7 +371,7 @@ class Story extends Model
         return (float) Cache::remember(
             "story.{$this->id}.avg_rating",
             self::CACHE_TTL,
-            fn () => $this->ratingAggregate?->average_rating ?? 0.0
+            fn() => $this->ratingAggregate?->average_rating ?? 0.0
         );
     }
 
@@ -396,7 +383,7 @@ class Story extends Model
         return (int) Cache::remember(
             "story.{$this->id}.total_ratings",
             self::CACHE_TTL,
-            fn () => $this->ratingAggregate?->total_ratings ?? 0
+            fn() => $this->ratingAggregate?->total_ratings ?? 0
         );
     }
 
@@ -430,7 +417,7 @@ class Story extends Model
     public function getFormattedRemainingTimeAttribute(): string
     {
         $remaining = $this->remaining_time;
-        if (! $remaining) {
+        if (!$remaining) {
             return '';
         }
 
@@ -556,14 +543,14 @@ class Story extends Model
 
         // Find a good break point (end of sentence if possible)
         $excerpt = Str::limit($plainText, self::MAX_EXCERPT_LENGTH, '');
-
+        
         // Try to end at a sentence
         $lastPeriod = strrpos($excerpt, '.');
         $lastQuestion = strrpos($excerpt, '?');
         $lastExclamation = strrpos($excerpt, '!');
-
+        
         $lastSentenceEnd = max($lastPeriod, $lastQuestion, $lastExclamation);
-
+        
         if ($lastSentenceEnd !== false && $lastSentenceEnd > self::MIN_EXCERPT_LENGTH) {
             $excerpt = substr($excerpt, 0, $lastSentenceEnd + 1);
         } else {
@@ -580,7 +567,7 @@ class Story extends Model
     {
         $wordCount = str_word_count(strip_tags($this->content ?? ''));
         $readingTime = (int) ceil($wordCount / self::AVG_READING_SPEED);
-
+        
         // Minimum 1 minute
         return max($readingTime, 1);
     }
@@ -604,7 +591,7 @@ class Story extends Model
 
             // Increment view counter
             $this->increment('views');
-
+            
             // Clear view-related caches
             Cache::forget("story.{$this->id}.stats");
             Cache::forget("story.{$this->id}.analytics");
@@ -624,7 +611,7 @@ class Story extends Model
         return Cache::remember(
             "story.{$this->id}.member.{$memberId}.viewed",
             self::CACHE_TTL,
-            fn () => $this->storyViews()->where('member_id', $memberId)->exists()
+            fn() => $this->storyViews()->where('member_id', $memberId)->exists()
         );
     }
 
@@ -636,7 +623,7 @@ class Story extends Model
         return Cache::remember(
             "story.{$this->id}.member.{$memberId}.interaction.{$action}",
             self::CACHE_TTL,
-            fn () => $this->interactions()
+            fn() => $this->interactions()
                 ->where('member_id', $memberId)
                 ->where('action', $action)
                 ->exists()
@@ -671,7 +658,6 @@ class Story extends Model
         }
 
         $remaining = $this->remaining_time;
-
         return $remaining && isset($remaining['hours']) && $remaining['hours'] < self::WARNING_HOURS;
     }
 
@@ -680,7 +666,7 @@ class Story extends Model
      */
     public function formatForApi(?int $memberId = null): array
     {
-        $cacheKey = "story.{$this->id}.formatted".($memberId ? ".member.{$memberId}" : '');
+        $cacheKey = "story.{$this->id}.formatted" . ($memberId ? ".member.{$memberId}" : '');
 
         return Cache::remember($cacheKey, self::CACHE_TTL_SHORT, function () use ($memberId): array {
             $data = [
@@ -691,7 +677,7 @@ class Story extends Model
                 'image_url' => $this->image_url,
                 'category_id' => $this->category_id,
                 'category_name' => $this->category?->name ?? '',
-                'tags' => $this->tags->map(fn ($tag) => [
+                'tags' => $this->tags->map(fn($tag) => [
                     'id' => $tag->id,
                     'name' => $tag->name,
                 ]),
@@ -725,7 +711,7 @@ class Story extends Model
                     'has_viewed' => $this->hasMemberViewed($memberId),
                     'has_bookmarked' => $this->hasMemberInteraction($memberId, 'bookmark'),
                     'has_shared' => $this->hasMemberInteraction($memberId, 'share'),
-                    'has_rated' => ! is_null($memberRating),
+                    'has_rated' => !is_null($memberRating),
                     'rating' => $memberRating,
                 ];
             }
@@ -765,7 +751,7 @@ class Story extends Model
     public function clearEnhancedCache(): void
     {
         $this->clearCache();
-
+        
         // Clear category cache
         if ($this->category_id) {
             Cache::forget("category.{$this->category_id}.stories");
@@ -826,11 +812,11 @@ class Story extends Model
     private function formatNumber(int $number): string
     {
         if ($number >= 1000000) {
-            return number_format($number / 1000000, 1).'M';
+            return number_format($number / 1000000, 1) . 'M';
         }
 
         if ($number >= 1000) {
-            return number_format($number / 1000, 1).'K';
+            return number_format($number / 1000, 1) . 'K';
         }
 
         return (string) $number;
@@ -844,15 +830,15 @@ class Story extends Model
         if ($days > 0) {
             return "{$days} يوم و {$hours} ساعة";
         }
-
+        
         if ($hours > 0) {
             return "{$hours} ساعة و {$minutes} دقيقة";
         }
-
+        
         if ($minutes > 0) {
             return "{$minutes} دقيقة";
         }
-
+        
         return "{$seconds} ثانية";
     }
 
@@ -866,7 +852,6 @@ class Story extends Model
         }
 
         $interactions = $this->interactions()->where('action', $action)->count();
-
         return round(($interactions / $this->views) * 100, 2);
     }
 
@@ -914,14 +899,13 @@ class Story extends Model
                     ->get();
 
                 $genderStats = $viewers->groupBy('member.gender')->map->count();
-
+                
                 $ageGroups = $viewers->map(function ($view) {
-                    if (! $view->member || ! $view->member->date_of_birth) {
+                    if (!$view->member || !$view->member->date_of_birth) {
                         return 'unknown';
                     }
-
+                    
                     $age = $view->member->date_of_birth->age;
-
                     return match (true) {
                         $age < 18 => 'under_18',
                         $age <= 24 => '18_24',
@@ -961,7 +945,7 @@ class Story extends Model
                     },
                     'ratings as recent_ratings' => function ($query) use ($days) {
                         $query->where('created_at', '>=', now()->subDays($days));
-                    },
+                    }
                 ])
                 ->orderByDesc('recent_views')
                 ->orderByDesc('recent_ratings')

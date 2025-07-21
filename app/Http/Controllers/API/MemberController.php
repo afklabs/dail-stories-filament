@@ -46,6 +46,9 @@ class MemberController extends Controller
 
             $validated = $validator->validated();
 
+            $member = null;
+            $token = null;
+
             DB::transaction(function () use ($validated, &$member, &$token) {
                 $member = Member::create([
                     'name' => $validated['name'],
@@ -114,7 +117,7 @@ class MemberController extends Controller
 
             $member = Member::where('email', $validated['email'])->first();
 
-            if (! $member || ! Hash::check($validated['password'], $member->password)) {
+            if (!$member || !Hash::check($validated['password'], $member->password)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid credentials',
@@ -231,8 +234,8 @@ class MemberController extends Controller
             $validated = $request->validated();
 
             // Handle password update if provided
-            if (! empty($validated['new_password'])) {
-                if (! Hash::check($validated['current_password'], $member->password)) {
+            if (!empty($validated['new_password'])) {
+                if (!Hash::check($validated['current_password'], $member->password)) {
                     return response()->json([
                         'success' => false,
                         'message' => 'Current password is incorrect',
@@ -341,11 +344,13 @@ class MemberController extends Controller
             // Add member rating to each story
             $ratedStories->getCollection()->transform(function ($story) {
                 $memberRating = $story->ratings->first();
-                $story->member_rating = [
-                    'rating' => $memberRating->rating,
-                    'comment' => $memberRating->comment,
-                    'created_at' => $memberRating->created_at,
-                ];
+                if ($memberRating) {
+                    $story->member_rating = [
+                        'rating' => $memberRating->rating,
+                        'comment' => $memberRating->comment,
+                        'created_at' => $memberRating->created_at,
+                    ];
+                }
                 unset($story->ratings); // Remove the relationship to clean response
 
                 return $story;
@@ -586,7 +591,9 @@ class MemberController extends Controller
         }
     }
 
-    // Private helper methods
+    /**
+     * Get progress status from reading progress
+     */
     private function getProgressStatus(int $progress): string
     {
         return match (true) {
@@ -599,6 +606,13 @@ class MemberController extends Controller
         };
     }
 
+    /**
+     * Generate recommendations for a member
+     *
+     * @param Member $member
+     * @param int $limit
+     * @return array<int, array<string, mixed>>
+     */
     private function generateRecommendations(Member $member, int $limit): array
     {
         // Get member's favorite categories (based on high ratings)
@@ -619,7 +633,7 @@ class MemberController extends Controller
 
         $recommendations = Story::where('active', true)
             ->whereNotIn('id', $readStoryIds)
-            ->when(! empty($favoriteCategories), function ($query) use ($favoriteCategories) {
+            ->when(!empty($favoriteCategories), function ($query) use ($favoriteCategories) {
                 $query->whereIn('category_id', $favoriteCategories);
             })
             ->with(['category:id,name', 'ratingAggregate'])
@@ -632,6 +646,9 @@ class MemberController extends Controller
         return $recommendations;
     }
 
+    /**
+     * Get average completion rate for a member
+     */
     private function getAverageCompletionRate(int $memberId): float
     {
         $totalStories = MemberReadingHistory::where('member_id', $memberId)->count();
@@ -641,6 +658,9 @@ class MemberController extends Controller
         return $totalStories > 0 ? round(($completedStories / $totalStories) * 100, 1) : 0;
     }
 
+    /**
+     * Get number of days member has been active
+     */
     private function getDaysActive(int $memberId): int
     {
         return MemberReadingHistory::where('member_id', $memberId)
@@ -649,20 +669,78 @@ class MemberController extends Controller
             ->count();
     }
 
+    /**
+     * Get current reading streak
+     */
     private function getCurrentReadingStreak(int $memberId): int
     {
         // Simplified streak calculation
-        // In production, implement proper streak logic
-        return 0;
+        // In production, implement proper streak logic based on consecutive reading days
+        $recentReadingDays = MemberReadingHistory::where('member_id', $memberId)
+            ->where('last_read_at', '>=', now()->subDays(30))
+            ->selectRaw('DATE(last_read_at) as read_date')
+            ->distinct()
+            ->orderByDesc('read_date')
+            ->pluck('read_date')
+            ->toArray();
+
+        $streak = 0;
+        $currentDate = now()->format('Y-m-d');
+
+        foreach ($recentReadingDays as $date) {
+            if ($date === $currentDate || $date === now()->subDay()->format('Y-m-d')) {
+                $streak++;
+                $currentDate = $date;
+            } else {
+                break;
+            }
+        }
+
+        return $streak;
     }
 
+    /**
+     * Get longest reading streak
+     */
     private function getLongestReadingStreak(int $memberId): int
     {
         // Simplified streak calculation
-        // In production, implement proper streak logic
-        return 0;
+        // In production, implement proper streak logic to find the longest consecutive streak
+        $allReadingDays = MemberReadingHistory::where('member_id', $memberId)
+            ->selectRaw('DATE(last_read_at) as read_date')
+            ->distinct()
+            ->orderBy('read_date')
+            ->pluck('read_date')
+            ->toArray();
+
+        if (empty($allReadingDays)) {
+            return 0;
+        }
+
+        $longestStreak = 1;
+        $currentStreak = 1;
+
+        for ($i = 1; $i < count($allReadingDays); $i++) {
+            $currentDate = \Carbon\Carbon::parse($allReadingDays[$i]);
+            $previousDate = \Carbon\Carbon::parse($allReadingDays[$i - 1]);
+
+            if ($currentDate->diffInDays($previousDate) === 1) {
+                $currentStreak++;
+                $longestStreak = max($longestStreak, $currentStreak);
+            } else {
+                $currentStreak = 1;
+            }
+        }
+
+        return $longestStreak;
     }
 
+    /**
+     * Get member's favorite categories
+     *
+     * @param int $memberId
+     * @return array<int, array<string, mixed>>
+     */
     private function getFavoriteCategories(int $memberId): array
     {
         return MemberStoryRating::where('member_id', $memberId)
@@ -677,13 +755,39 @@ class MemberController extends Controller
             ->toArray();
     }
 
+    /**
+     * Get reading patterns for a member
+     *
+     * @param int $memberId
+     * @return array<string, mixed>
+     */
     private function getReadingPatterns(int $memberId): array
     {
-        // Simplified reading patterns
-        // In production, analyze reading times, completion rates, etc.
+        // Get average session duration
+        $averageSessionDuration = MemberReadingHistory::where('member_id', $memberId)
+            ->avg('time_spent') ?? 0;
+
+        // Get preferred reading time (simplified - based on when most reading happens)
+        $hourlyReadingActivity = MemberReadingHistory::where('member_id', $memberId)
+            ->selectRaw('HOUR(last_read_at) as hour, COUNT(*) as count')
+            ->groupBy('hour')
+            ->orderByDesc('count')
+            ->first();
+
+        $preferredTime = 'evening'; // default
+        if ($hourlyReadingActivity) {
+            $hour = $hourlyReadingActivity->hour;
+            $preferredTime = match (true) {
+                $hour >= 6 && $hour < 12 => 'morning',
+                $hour >= 12 && $hour < 18 => 'afternoon',
+                $hour >= 18 && $hour < 24 => 'evening',
+                default => 'night',
+            };
+        }
+
         return [
-            'preferred_reading_time' => 'evening',
-            'average_session_duration' => 15, // minutes
+            'preferred_reading_time' => $preferredTime,
+            'average_session_duration' => round($averageSessionDuration / 60, 1), // Convert to minutes
             'completion_rate' => $this->getAverageCompletionRate($memberId),
         ];
     }

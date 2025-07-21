@@ -153,17 +153,22 @@ class EditPermission extends EditRecord
         return $data;
     }
 
-    protected function afterSave(): void
-    {
-        // Log permission update
+protected function afterSave(): void
+{
+    $record = $this->getRecord();
+    
+    if ($record instanceof \Spatie\Permission\Models\Permission) {
+        $record->roles()->touch();
+        $record->users()->touch();
+        
+        // Use activity() helper
         activity()
+            ->performedOn($record)
             ->causedBy(auth()->user())
-            ->performedOn($this->record)
-            ->log('Permission updated: '.$this->record->name);
-
-        // Clear cached permissions
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            ->withProperties(['name' => $record->name])
+            ->log('Permission updated');
     }
+}
 
     protected function beforeSave(): void
     {

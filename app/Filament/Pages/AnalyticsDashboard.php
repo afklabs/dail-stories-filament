@@ -163,6 +163,9 @@ class AnalyticsDashboard extends Page
         });
     }
 
+    /**
+     * Get top stories - FIXED: Returns array instead of Collection
+     */
     public function getTopStories(): array
     {
         if ($this->selectedStory) {
@@ -191,7 +194,8 @@ class AnalyticsDashboard extends Page
                         'rating' => $story->ratingAggregate?->average_rating ?? 0,
                         'total_ratings' => $story->ratingAggregate?->total_ratings ?? 0,
                     ];
-                });
+                })
+                ->toArray(); // FIXED: Added toArray() to convert Collection to array
         });
     }
 
@@ -353,5 +357,157 @@ class AnalyticsDashboard extends Page
         $volumeScore = min(($aggregate->total_ratings / 50) * 30, 30); // 30% weight on volume, max at 50 ratings
         
         return round($ratingScore + $volumeScore, 1);
+    }
+
+    /**
+     * Get member analytics - ADDED: New method that might be needed
+     */
+    public function getMemberAnalytics(): array
+    {
+        $cacheKey = "member_analytics_{$this->selectedPeriod}_{$this->selectedStory}";
+        
+        return Cache::remember($cacheKey, 600, function () {
+            $dateFrom = Carbon::parse($this->dateFrom);
+            $dateTo = Carbon::parse($this->dateTo);
+            
+            // Active members in period
+            $activeMembersQuery = Member::whereHas('storyViews', function ($q) use ($dateFrom, $dateTo) {
+                $q->whereBetween('viewed_at', [$dateFrom, $dateTo]);
+            });
+            
+            if ($this->selectedStory) {
+                $activeMembersQuery->whereHas('storyViews', function ($q) {
+                    $q->where('story_id', $this->selectedStory);
+                });
+            }
+            
+            $activeMembers = $activeMembersQuery->count();
+            
+            // New members in period
+            $newMembers = Member::whereBetween('created_at', [$dateFrom, $dateTo])->count();
+            
+            // Returning members
+            $returningMembers = Member::whereHas('storyViews', function ($q) use ($dateFrom, $dateTo) {
+                $q->whereBetween('viewed_at', [$dateFrom, $dateTo]);
+            })
+            ->where('created_at', '<', $dateFrom)
+            ->count();
+            
+            return [
+                'active_members' => $activeMembers,
+                'new_members' => $newMembers,
+                'returning_members' => $returningMembers,
+                'member_growth_rate' => $activeMembers > 0 ? round(($newMembers / $activeMembers) * 100, 1) : 0,
+            ];
+        });
+    }
+
+    /**
+     * Get reading insights - ADDED: New method that might be needed
+     */
+    public function getReadingInsights(): array
+    {
+        $cacheKey = "reading_insights_{$this->selectedPeriod}_{$this->selectedStory}";
+        
+        return Cache::remember($cacheKey, 600, function () {
+            $dateFrom = Carbon::parse($this->dateFrom);
+            $dateTo = Carbon::parse($this->dateTo);
+            
+            // Average reading time
+            $readingQuery = \App\Models\MemberReadingHistory::whereBetween('last_read_at', [$dateFrom, $dateTo]);
+            
+            if ($this->selectedStory) {
+                $readingQuery->where('story_id', $this->selectedStory);
+            }
+            
+            $avgReadingTime = $readingQuery->avg('time_spent') ?? 0;
+            $completionRate = $readingQuery->where('reading_progress', '>=', 100)->count();
+            $totalReads = $readingQuery->count();
+            
+            return [
+                'average_reading_time' => round($avgReadingTime / 60, 1), // Convert to minutes
+                'completion_rate' => $totalReads > 0 ? round(($completionRate / $totalReads) * 100, 1) : 0,
+                'total_reads' => $totalReads,
+                'completed_reads' => $completionRate,
+            ];
+        });
+    }
+
+    /**
+     * Get category performance - ADDED: New method that might be needed
+     */
+    public function getCategoryPerformance(): array
+    {
+        if ($this->selectedStory) {
+            return [];
+        }
+        
+        $cacheKey = "category_performance_{$this->selectedPeriod}";
+        
+        return Cache::remember($cacheKey, 600, function () {
+            $dateFrom = Carbon::parse($this->dateFrom);
+            $dateTo = Carbon::parse($this->dateTo);
+            
+            return \App\Models\Category::withCount([
+                'stories as period_stories' => function ($q) use ($dateFrom, $dateTo) {
+                    $q->whereBetween('created_at', [$dateFrom, $dateTo]);
+                },
+                'stories as total_views' => function ($q) use ($dateFrom, $dateTo) {
+                    $q->join('story_views', 'stories.id', '=', 'story_views.story_id')
+                        ->whereBetween('story_views.viewed_at', [$dateFrom, $dateTo]);
+                }
+            ])
+            ->orderByDesc('total_views')
+            ->limit(10)
+            ->get()
+            ->map(function ($category) {
+                return [
+                    'name' => $category->name,
+                    'stories_count' => $category->period_stories,
+                    'views' => $category->total_views,
+                    'avg_views_per_story' => $category->period_stories > 0 
+                        ? round($category->total_views / $category->period_stories, 1) 
+                        : 0,
+                ];
+            })
+            ->toArray();
+        });
+    }
+
+    /**
+     * Get time-based analytics - ADDED: New method that might be needed
+     */
+    public function getTimeBasedAnalytics(): array
+    {
+        $cacheKey = "time_based_analytics_{$this->selectedPeriod}_{$this->selectedStory}";
+        
+        return Cache::remember($cacheKey, 600, function () {
+            $dateFrom = Carbon::parse($this->dateFrom);
+            $dateTo = Carbon::parse($this->dateTo);
+            
+            $hourlyData = [];
+            for ($hour = 0; $hour < 24; $hour++) {
+                $viewsQuery = StoryView::whereBetween('viewed_at', [$dateFrom, $dateTo])
+                    ->whereRaw('HOUR(viewed_at) = ?', [$hour]);
+                
+                if ($this->selectedStory) {
+                    $viewsQuery->where('story_id', $this->selectedStory);
+                }
+                
+                $hourlyData[] = [
+                    'hour' => $hour,
+                    'views' => $viewsQuery->count(),
+                ];
+            }
+            
+            // Find peak hours
+            $sortedHours = collect($hourlyData)->sortByDesc('views')->take(3);
+            
+            return [
+                'hourly_distribution' => $hourlyData,
+                'peak_hours' => $sortedHours->pluck('hour')->toArray(),
+                'peak_hour_views' => $sortedHours->first()['views'] ?? 0,
+            ];
+        });
     }
 }

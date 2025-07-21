@@ -35,6 +35,8 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('Daily Stories Admin')
             ->brandLogo(asset('images/logo.png'))
             ->brandLogoHeight('2rem')
+            ->maxContentWidth('7xl') // This constrains the content width
+            ->sidebarCollapsibleOnDesktop() // Optional: Make sidebar collapsible
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
@@ -61,38 +63,10 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make()
-                    ->gridColumns([
-                        'default' => 1,
-                        'sm' => 2,
-                        'lg' => 3
-                    ])
-                    ->sectionColumnSpan(1)
-                    ->checkboxListColumns([
-                        'default' => 1,
-                        'sm' => 2,
-                        'lg' => 4,
-                    ])
-                    ->resourceCheckboxListColumns([
-                        'default' => 1,
-                        'sm' => 2,
-                    ]),
+                FilamentShieldPlugin::make(),
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ])
-            ->spa() // Enable SPA mode for better performance
-            ->unsavedChangesAlerts() // Warn about unsaved changes
-            ->databaseNotifications() // Enable notifications
-            ->globalSearchKeyBindings(['command+k', 'ctrl+k']) // Search shortcuts
-            ->sidebarCollapsibleOnDesktop() // Collapsible sidebar
-            ->navigationGroups([
-                'Content Management',
-                'User Management', 
-                'Analytics',
-                'Settings',
-                'System'
-            ])
-            ->maxContentWidth('full'); // Full width layout
+            ]);
     }
 }

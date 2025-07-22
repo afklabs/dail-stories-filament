@@ -116,10 +116,8 @@ class StoryController extends Controller
                     ]),
                     'views' => $story->views,
                     'reading_time_minutes' => $story->reading_time_minutes,
-                    'rating' => [
-                        'average' => round($story->ratingAggregate?->average_rating ?? 0, 1),
-                        'total' => $story->ratingAggregate?->total_ratings ?? 0,
-                    ],
+                    'rating' => $this->transformRating($story->ratingAggregate),
+
                     'active_from' => $story->active_from?->toISOString(),
                     'created_at' => $story->created_at->toISOString(),
                 ];
@@ -210,11 +208,8 @@ class StoryController extends Controller
                 ]),
                 'views' => $story->views,
                 'reading_time_minutes' => $story->reading_time_minutes,
-                'rating' => [
-                    'average' => round($story->ratingAggregate?->average_rating ?? 0, 1),
-                    'total' => $story->ratingAggregate?->total_ratings ?? 0,
-                    'distribution' => $story->ratingAggregate?->rating_distribution ?? [],
-                ],
+'rating' => $this->transformRating($story->ratingAggregate),
+
                 'active_from' => $story->active_from?->toISOString(),
                 'active_until' => $story->active_until?->toISOString(),
                 'created_at' => $story->created_at->toISOString(),
@@ -293,10 +288,8 @@ class StoryController extends Controller
                     ] : null,
                     'views' => $story->views,
                     'reading_time_minutes' => $story->reading_time_minutes,
-                    'rating' => [
-                        'average' => round($story->ratingAggregate?->average_rating ?? 0, 1),
-                        'total' => $story->ratingAggregate?->total_ratings ?? 0,
-                    ],
+'rating' => $this->transformRating($story->ratingAggregate),
+
                     'created_at' => $story->created_at->toISOString(),
                 ];
             });
@@ -391,10 +384,8 @@ class StoryController extends Controller
                     'views' => $story->views,
                     'recent_views' => $story->recent_views ?? 0,
                     'reading_time_minutes' => $story->reading_time_minutes,
-                    'rating' => [
-                        'average' => round($story->ratingAggregate?->average_rating ?? 0, 1),
-                        'total' => $story->ratingAggregate?->total_ratings ?? 0,
-                    ],
+'rating' => $this->transformRating($story->ratingAggregate),
+
                     'created_at' => $story->created_at->toISOString(),
                 ];
             });
@@ -1150,4 +1141,55 @@ class StoryController extends Controller
         Cache::forget("story_analytics_{$storyId}_30days_detailed");
         Cache::forget("featured_stories_5");
     }
+
+
+
+
+
+    /**
+ * Safely get numeric value for rating
+ */
+private function getNumericRating($value): float
+{
+    if (is_null($value)) {
+        return 0.0;
+    }
+    
+    // Convert to float if it's a string
+    if (is_string($value)) {
+        return (float) $value;
+    }
+    
+    // If it's already numeric, return as float
+    if (is_numeric($value)) {
+        return (float) $value;
+    }
+    
+    // Default fallback
+    return 0.0;
+}
+
+/**
+ * Transform story rating data safely
+ */
+private function transformRating($ratingAggregate): array
+{
+    if (!$ratingAggregate) {
+        return [
+            'average' => 0.0,
+            'total' => 0,
+            'distribution' => []
+        ];
+    }
+    
+    // Safely convert average_rating to float before rounding
+    $averageRating = $this->getNumericRating($ratingAggregate->average_rating);
+    
+    return [
+        'average' => round($averageRating, 1),
+        'total' => (int) ($ratingAggregate->total_ratings ?? 0),
+        'distribution' => $ratingAggregate->rating_distribution ?? []
+    ];
+}
+
 }

@@ -61,10 +61,8 @@ return Application::configure(basePath: dirname(__DIR__))
         |--------------------------------------------------------------------------
         */
 
-        // Global middleware for all routes
-        $middleware->append([
-            \Illuminate\Http\Middleware\HandleCors::class,
-        ]);
+        // CORS Configuration - MOVED TO TOP FOR PRIORITY
+        $middleware->prepend(\App\Http\Middleware\CorsMiddleware::class);
 
         // API-specific middleware
         $middleware->api(prepend: [
@@ -75,6 +73,24 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \Illuminate\Session\Middleware\StartSession::class,
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | CSRF Token Exceptions for API Routes
+        |--------------------------------------------------------------------------
+        */
+        $middleware->validateCsrfTokens(except: [
+            'api/*',
+            'api/v1/*',
+            'admin/api/*',
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Trusted Hosts & Proxies (for development)
+        |--------------------------------------------------------------------------
+        */
+        $middleware->trustHosts(at: ['localhost', '10.0.2.2', '*.ngrok.io']);
 
         /*
         |--------------------------------------------------------------------------
@@ -92,8 +108,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'throttle.admin' => \Illuminate\Routing\Middleware\ThrottleRequests::class.':120,1',
 
             // Custom middleware
-            'device.verification' => \App\Http\Middleware\VerifyDeviceId::class, // Create this
-            'api.version' => \App\Http\Middleware\ApiVersionMiddleware::class, // Create this
+            'device.verification' => \App\Http\Middleware\VerifyDeviceId::class,
+            'api.version' => \App\Http\Middleware\ApiVersionMiddleware::class,
         ]);
 
         /*
@@ -103,6 +119,7 @@ return Application::configure(basePath: dirname(__DIR__))
         */
 
         $middleware->priority([
+            \App\Http\Middleware\CorsMiddleware::class, // CORS first
             \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
             \Illuminate\Session\Middleware\StartSession::class,

@@ -14,6 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Facades\Log;
 
 class Member extends Authenticatable implements FilamentUser
 {
@@ -23,6 +24,7 @@ class Member extends Authenticatable implements FilamentUser
     protected $fillable = [
         'name',
         'email',
+        'password',
         'phone',
         'avatar',
         'date_of_birth',
@@ -31,6 +33,8 @@ class Member extends Authenticatable implements FilamentUser
         'device_id',
         'last_login_at',
         'email_verified_at',
+        'registration_ip',
+        'user_agent',
     ];
     // Add accessor for avatar_url
     protected $appends = ['avatar_url'];
@@ -68,8 +72,8 @@ class Member extends Authenticatable implements FilamentUser
     {
         // Only allow verified, active members with admin role
         return $this->status === 'active' &&
-               $this->email_verified_at !== null &&
-               $this->hasRole('member_admin'); // If using Spatie Permission
+            $this->email_verified_at !== null &&
+            $this->hasRole('member_admin'); // If using Spatie Permission
     }
 
     /*
@@ -88,7 +92,7 @@ class Member extends Authenticatable implements FilamentUser
         return $this->hasMany(MemberStoryInteraction::class);
     }
 
-        public function readingHistory()
+    public function readingHistory()
     {
         return $this->hasMany(MemberReadingHistory::class);
     }
@@ -149,11 +153,11 @@ class Member extends Authenticatable implements FilamentUser
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: function () {
                 if ($this->avatar && Storage::disk('public')->exists("members/avatars/{$this->avatar}")) {
-                    return Storage::disk('public')->url("members/avatars/{$this->avatar}");
+                    return Storage::url("members/avatars/{$this->avatar}");
                 }
 
                 // ✅ IMPROVED: Fallback to Gravatar, then default
-                $gravatar = 'https://www.gravatar.com/avatar/'.md5(strtolower(trim($this->email))).'?d=mp&s=200';
+                $gravatar = 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($this->email))) . '?d=mp&s=200';
 
                 return $gravatar;
             }
@@ -163,14 +167,14 @@ class Member extends Authenticatable implements FilamentUser
     protected function age(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => $this->date_of_birth?->age
+            get: fn() => $this->date_of_birth?->age
         );
     }
 
     protected function isActive(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => $this->status === 'active'
+            get: fn() => $this->status === 'active'
         );
     }
 
@@ -255,7 +259,7 @@ class Member extends Authenticatable implements FilamentUser
                 'device_id' => $deviceId,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to update last login', [
+            Log::error('Failed to update last login', [
                 'member_id' => $this->id,
                 'error' => $e->getMessage(),
             ]);
@@ -287,7 +291,7 @@ class Member extends Authenticatable implements FilamentUser
                 ]
             );
         } catch (\Exception $e) {
-            \Log::error('Failed to create interaction', [
+            Log::error('Failed to create interaction', [
                 'member_id' => $this->id,
                 'story_id' => $story->id,
                 'action' => $action,
@@ -323,7 +327,7 @@ class Member extends Authenticatable implements FilamentUser
                 ]
             );
         } catch (\Exception $e) {
-            \Log::error('Failed to update reading progress', [
+            Log::error('Failed to update reading progress', [
                 'member_id' => $this->id,
                 'story_id' => $story->id,
                 'error' => $e->getMessage(),
@@ -390,7 +394,7 @@ class Member extends Authenticatable implements FilamentUser
             ->where('last_read_at', '>=', now()->subDays(30))
             ->orderBy('last_read_at', 'desc')
             ->pluck('last_read_at')
-            ->map(fn ($date) => $date->format('Y-m-d'))
+            ->map(fn($date) => $date->format('Y-m-d'))
             ->unique()
             ->values();
 

@@ -20,16 +20,16 @@ class Setting extends Model
     {
         return Cache::remember("setting_{$key}", 3600, function () use ($key, $default) {
             $setting = self::where('key', $key)->first();
-            
+
             if (!$setting) {
                 return $default;
             }
-            
+
             // Handle type casting based on the type field
             if ($setting->type) {
                 return self::castValue($setting->value, $setting->type);
             }
-            
+
             return $setting->value;
         });
     }
@@ -58,11 +58,11 @@ class Setting extends Model
             ['key' => $key],
             ['value' => $value]
         );
-        
+
         Cache::forget("setting_{$key}");
         Cache::forget('all_settings');
         Cache::forget("settings_group_{$setting->group}");
-        
+
         return $setting;
     }
 
@@ -92,7 +92,7 @@ class Setting extends Model
             Cache::forget("setting_{$key}");
         }
         Cache::forget('all_settings');
-        
+
         // Clear group caches
         $groups = self::distinct('group')->pluck('group');
         foreach ($groups as $group) {

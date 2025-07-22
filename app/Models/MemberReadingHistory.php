@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 
 class MemberReadingHistory extends Model
 {
@@ -117,7 +118,7 @@ class MemberReadingHistory extends Model
     protected function progressPercentage(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => number_format((float) $this->reading_progress, 1).'%'
+            get: fn() => number_format((float) $this->reading_progress, 1) . '%'
         );
     }
 
@@ -144,21 +145,21 @@ class MemberReadingHistory extends Model
     protected function timeSpentInMinutes(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => round((float) $this->time_spent / 60, 2)
+            get: fn() => round((float) $this->time_spent / 60, 2)
         );
     }
 
     protected function isCompleted(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => $this->reading_progress >= 100
+            get: fn() => $this->reading_progress >= 100
         );
     }
 
     protected function isStarted(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => $this->reading_progress > 0
+            get: fn() => $this->reading_progress > 0
         );
     }
 
@@ -180,7 +181,7 @@ class MemberReadingHistory extends Model
     protected function progressColor(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => match ($this->progress_status) {
+            get: fn() => match ($this->progress_status) {
                 'not_started' => 'gray',
                 'just_started' => 'blue',
                 'in_progress' => 'yellow',
@@ -194,7 +195,7 @@ class MemberReadingHistory extends Model
     protected function lastReadHuman(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => $this->last_read_at?->diffForHumans() ?? 'Never'
+            get: fn() => $this->last_read_at?->diffForHumans() ?? 'Never'
         );
     }
 
@@ -217,7 +218,7 @@ class MemberReadingHistory extends Model
                 'last_read_at' => now(),
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to update reading progress', [
+            Log::error('Failed to update reading progress', [
                 'history_id' => $this->id,
                 'progress' => $progress,
                 'additional_time' => $additionalTime,
@@ -241,7 +242,7 @@ class MemberReadingHistory extends Model
                 'last_read_at' => now(),
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to add reading time', [
+            Log::error('Failed to add reading time', [
                 'history_id' => $this->id,
                 'seconds' => $seconds,
                 'error' => $e->getMessage(),
@@ -422,7 +423,7 @@ class MemberReadingHistory extends Model
                     );
                 }
             } catch (\Exception $e) {
-                \Log::error('Error in MemberReadingHistory saved event', [
+                Log::error('Error in MemberReadingHistory saved event', [
                     'model_id' => $model->id,
                     'error' => $e->getMessage(),
                 ]);
@@ -465,7 +466,7 @@ class MemberReadingHistory extends Model
 
     public function getFilamentName(): string
     {
-        return $this->member?->name.' → '.$this->story?->title;
+        return $this->member?->name . ' → ' . $this->story?->title;
     }
 
     public function getProgressBadgeColor(): string

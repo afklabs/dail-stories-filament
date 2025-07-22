@@ -61,12 +61,12 @@ class MemberController extends Controller
      * Member service for business logic
      */
     private MemberService $memberService;
-    
+
     /**
      * File upload service for secure file handling
      */
     private FileUploadService $fileUploadService;
-    
+
     /**
      * Password reset service
      */
@@ -109,8 +109,8 @@ class MemberController extends Controller
             $ipRateLimitKey = 'registration:ip:' . $request->ip();
             if (RateLimiter::tooManyAttempts($ipRateLimitKey, 5)) {
                 return $this->errorResponse(
-                    'Too many registration attempts. Please try again in ' . 
-                    ceil(RateLimiter::availableIn($ipRateLimitKey) / 60) . ' minutes.',
+                    'Too many registration attempts. Please try again in ' .
+                        ceil(RateLimiter::availableIn($ipRateLimitKey) / 60) . ' minutes.',
                     429
                 );
             }
@@ -177,10 +177,8 @@ class MemberController extends Controller
                 ],
                 'registration_completed_at' => now()->toISOString(),
             ], 'Registration successful', 201);
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Registration validation failed', 422, $e->errors());
-
         } catch (\Illuminate\Database\QueryException $e) {
             // Handle duplicate email constraint violation
             if ($e->errorInfo[1] === 1062) { // MySQL duplicate entry
@@ -200,7 +198,6 @@ class MemberController extends Controller
             ]);
 
             return $this->errorResponse('Registration failed due to database error', 500);
-
         } catch (\Exception $e) {
             Log::error('Member registration error', [
                 'error' => $e->getMessage(),
@@ -241,12 +238,12 @@ class MemberController extends Controller
             // Multi-layered rate limiting for enhanced security
             $ipRateLimitKey = 'login:ip:' . $request->ip();
             $emailRateLimitKey = 'login:email:' . $email;
-            
+
             // Check IP-based rate limit (more permissive)
             if (RateLimiter::tooManyAttempts($ipRateLimitKey, 10)) {
                 return $this->errorResponse(
-                    'Too many login attempts from your location. Please try again in ' . 
-                    ceil(RateLimiter::availableIn($ipRateLimitKey) / 60) . ' minutes.',
+                    'Too many login attempts from your location. Please try again in ' .
+                        ceil(RateLimiter::availableIn($ipRateLimitKey) / 60) . ' minutes.',
                     429
                 );
             }
@@ -254,8 +251,8 @@ class MemberController extends Controller
             // Check email-based rate limit (more restrictive)
             if (RateLimiter::tooManyAttempts($emailRateLimitKey, 5)) {
                 return $this->errorResponse(
-                    'Too many login attempts for this email. Please try again in ' . 
-                    ceil(RateLimiter::availableIn($emailRateLimitKey) / 60) . ' minutes.',
+                    'Too many login attempts for this email. Please try again in ' .
+                        ceil(RateLimiter::availableIn($emailRateLimitKey) / 60) . ' minutes.',
                     429,
                     ['retry_after_seconds' => RateLimiter::availableIn($emailRateLimitKey)]
                 );
@@ -268,7 +265,7 @@ class MemberController extends Controller
                 // Apply rate limiting on failed attempts
                 RateLimiter::hit($ipRateLimitKey, 900); // 15 minutes
                 RateLimiter::hit($emailRateLimitKey, 900);
-                
+
                 // Log security event
                 Log::warning('Failed login attempt', [
                     'email' => $email,
@@ -285,8 +282,8 @@ class MemberController extends Controller
             // Validate account status
             if (!$this->memberService->isAccountActive($member)) {
                 RateLimiter::hit($emailRateLimitKey, 900);
-                
-                $statusMessage = match($member->status) {
+
+                $statusMessage = match ($member->status) {
                     'inactive' => 'Your account is inactive. Please contact support.',
                     'suspended' => 'Your account has been suspended. Please contact support.',
                     'banned' => 'Your account has been banned. Please contact support.',
@@ -351,10 +348,8 @@ class MemberController extends Controller
                 ],
                 'login_completed_at' => now()->toISOString(),
             ], 'Login successful');
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Login validation failed', 422, $e->errors());
-
         } catch (\Exception $e) {
             Log::error('Member login error', [
                 'error' => $e->getMessage(),
@@ -381,11 +376,11 @@ class MemberController extends Controller
         try {
             $member = $request->user();
             $currentToken = $request->user()->currentAccessToken();
-            
+
             if ($currentToken) {
                 // Revoke current token
                 $currentToken->delete();
-                
+
                 // Optionally revoke all tokens for enhanced security
                 if ($request->boolean('revoke_all_sessions', false)) {
                     $member->tokens()->delete();
@@ -402,7 +397,6 @@ class MemberController extends Controller
                 'logged_out_at' => now()->toISOString(),
                 'sessions_revoked' => $request->boolean('revoke_all_sessions', false) ? 'all' : 'current',
             ], 'Logout successful');
-
         } catch (\Exception $e) {
             Log::error('Member logout error', [
                 'error' => $e->getMessage(),
@@ -426,7 +420,7 @@ class MemberController extends Controller
     {
         try {
             $member = $request->user();
-            
+
             // Load additional profile statistics efficiently
             $member->loadCount([
                 'readingHistory as total_stories_read',
@@ -447,7 +441,6 @@ class MemberController extends Controller
                     'total_login_count' => $member->login_count ?? 0,
                 ],
             ], 'Profile retrieved successfully');
-
         } catch (\Exception $e) {
             Log::error('Get member profile error', [
                 'error' => $e->getMessage(),
@@ -483,13 +476,13 @@ class MemberController extends Controller
                         ['current_password' => ['Current password is incorrect']]
                     );
                 }
-                
+
                 $validated['password'] = Hash::make($validated['new_password']);
                 unset($validated['current_password'], $validated['new_password']);
-                
+
                 // Revoke all tokens when password changes for security
                 $member->tokens()->delete();
-                
+
                 // Create new token for current session
                 $newToken = $member->createToken(
                     'profile-update-' . now()->format('Y-m-d-H-i-s'),
@@ -534,10 +527,8 @@ class MemberController extends Controller
             }
 
             return $this->successResponse($response, 'Profile updated successfully');
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Profile update validation failed', 422, $e->errors());
-
         } catch (\Exception $e) {
             Log::error('Update member profile error', [
                 'error' => $e->getMessage(),
@@ -592,10 +583,8 @@ class MemberController extends Controller
                 ],
                 'uploaded_at' => now()->toISOString(),
             ], 'Avatar uploaded successfully');
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Avatar upload validation failed', 422, $e->errors());
-
         } catch (\Exception $e) {
             Log::error('Avatar upload error', [
                 'member_id' => $request->user()?->id,
@@ -669,10 +658,8 @@ class MemberController extends Controller
                 'changed_at' => now()->toISOString(),
                 'security_notice' => 'All other sessions have been logged out for security.',
             ], 'Password changed successfully');
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Password change validation failed', 422, $e->errors());
-
         } catch (\Exception $e) {
             Log::error('Password change error', [
                 'member_id' => $request->user()?->id,
@@ -728,17 +715,17 @@ class MemberController extends Controller
             DB::transaction(function () use ($member) {
                 // Delete all authentication tokens
                 $member->tokens()->delete();
-                
+
                 // Delete user-generated content and interactions
                 MemberReadingHistory::where('member_id', $member->id)->delete();
                 MemberStoryInteraction::where('member_id', $member->id)->delete();
                 MemberStoryRating::where('member_id', $member->id)->delete();
-                
+
                 // Delete avatar file from storage
                 if ($member->avatar) {
                     $this->fileUploadService->deleteFile($member->avatar);
                 }
-                
+
                 // Finally delete the member account
                 $member->delete();
             });
@@ -750,10 +737,8 @@ class MemberController extends Controller
                 'message' => 'Your account and all associated data have been permanently deleted.',
                 'support_contact' => config('app.support_email'),
             ], 'Account deleted successfully');
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Account deletion validation failed', 422, $e->errors());
-
         } catch (\Exception $e) {
             Log::error('Account deletion error', [
                 'member_id' => $request->user()?->id,
@@ -806,7 +791,7 @@ class MemberController extends Controller
 
             // Check if member exists (for logging purposes only)
             $member = Member::where('email', $email)->first();
-            
+
             if ($member && $member->status === 'active') {
                 Log::info('Password reset requested for valid account', [
                     'email' => $email,
@@ -829,7 +814,6 @@ class MemberController extends Controller
                 'requested_at' => now()->toISOString(),
                 'next_steps' => 'Check your email for reset instructions if the account exists.',
             ], $message);
-
         } catch (\Exception $e) {
             Log::error('Forgot password error', [
                 'error' => $e->getMessage(),
@@ -854,7 +838,7 @@ class MemberController extends Controller
     {
         try {
             $member = $request->user();
-            
+
             // Validate pagination parameters
             $validator = Validator::make($request->all(), [
                 'per_page' => 'integer|min:1|max:50',
@@ -877,7 +861,7 @@ class MemberController extends Controller
 
             // Apply status filter
             if ($status !== 'all') {
-                match($status) {
+                match ($status) {
                     'completed' => $query->where('reading_progress', '>=', 100),
                     'in_progress' => $query->whereBetween('reading_progress', [1, 99]),
                     'not_started' => $query->where('reading_progress', 0),
@@ -937,10 +921,8 @@ class MemberController extends Controller
                     'available_statuses' => ['all', 'completed', 'in_progress', 'not_started'],
                 ],
             ], 'Reading history retrieved successfully');
-
         } catch (ValidationException $e) {
             return $this->errorResponse('Invalid parameters', 422, $e->errors());
-
         } catch (\Exception $e) {
             Log::error('Get member reading history error', [
                 'error' => $e->getMessage(),
@@ -980,7 +962,7 @@ class MemberController extends Controller
     /**
      * Standardized success response format
      */
-    private function successResponse($data = [], string $message = 'Success', int $code = 200): JsonResponse
+    protected function successResponse($data = [], string $message = 'Success', int $code = 200): JsonResponse
     {
         return response()->json([
             'success' => true,
@@ -993,7 +975,7 @@ class MemberController extends Controller
     /**
      * Standardized error response format
      */
-    private function errorResponse(string $message = 'Error', int $code = 400, $errors = null): JsonResponse
+    protected function errorResponse(string $message = 'Error', int $code = 400, $errors = null): JsonResponse
     {
         $response = [
             'success' => false,

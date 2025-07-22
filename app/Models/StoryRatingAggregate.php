@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * StoryRatingAggregate Model for Daily Stories App with Filament Integration
@@ -174,9 +175,9 @@ class StoryRatingAggregate extends Model
         $halfStar = ($this->average_rating - $fullStars) >= 0.5 ? 1 : 0;
         $emptyStars = 5 - $fullStars - $halfStar;
 
-        return str_repeat('⭐', (int) $fullStars).
-            str_repeat('✨', $halfStar).
-            str_repeat('☆', $emptyStars);
+        return str_repeat('⭐', (int) $fullStars) .
+            str_repeat('✨', (int) $halfStar) .
+            str_repeat('☆', (int) $emptyStars);
     }
 
     /**
@@ -374,7 +375,7 @@ class StoryRatingAggregate extends Model
 
             // Enhanced metrics
             $verifiedRatings = $ratings->where('is_verified', true);
-            $ratingsWithComments = $ratings->filter(fn ($r) => ! empty(trim($r->comment ?? '')));
+            $ratingsWithComments = $ratings->filter(fn($r) => ! empty(trim($r->comment ?? '')));
 
             self::updateOrCreate(
                 ['story_id' => $storyId],
@@ -394,9 +395,8 @@ class StoryRatingAggregate extends Model
 
             // Clear related caches
             self::clearStoryCache($storyId);
-
         } catch (\Exception $e) {
-            \Log::error('Failed to update story rating aggregate', [
+            Log::error('Failed to update story rating aggregate', [
                 'story_id' => $storyId,
                 'error' => $e->getMessage(),
             ]);
@@ -506,7 +506,7 @@ class StoryRatingAggregate extends Model
                 ->where('created_at', '>=', Carbon::now()->subDays($days))
                 ->orderBy('created_at')
                 ->get()
-                ->groupBy(fn ($rating) => $rating->created_at->format('Y-m-d'));
+                ->groupBy(fn($rating) => $rating->created_at->format('Y-m-d'));
 
             $trends = [];
             foreach ($ratings as $date => $dayRatings) {

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Story Model for Daily Stories App with Filament Integration
@@ -257,9 +258,9 @@ class Story extends Model
             return $this->image;
         }
 
-        return Storage::disk('public')->url($this->image);
+        return Storage::url($this->image);
     }
-
+    
     /**
      * Get sanitized excerpt with auto-generation fallback
      */
@@ -543,14 +544,14 @@ class Story extends Model
 
         // Find a good break point (end of sentence if possible)
         $excerpt = Str::limit($plainText, self::MAX_EXCERPT_LENGTH, '');
-        
+
         // Try to end at a sentence
         $lastPeriod = strrpos($excerpt, '.');
         $lastQuestion = strrpos($excerpt, '?');
         $lastExclamation = strrpos($excerpt, '!');
-        
+
         $lastSentenceEnd = max($lastPeriod, $lastQuestion, $lastExclamation);
-        
+
         if ($lastSentenceEnd !== false && $lastSentenceEnd > self::MIN_EXCERPT_LENGTH) {
             $excerpt = substr($excerpt, 0, $lastSentenceEnd + 1);
         } else {
@@ -567,7 +568,7 @@ class Story extends Model
     {
         $wordCount = str_word_count(strip_tags($this->content ?? ''));
         $readingTime = (int) ceil($wordCount / self::AVG_READING_SPEED);
-        
+
         // Minimum 1 minute
         return max($readingTime, 1);
     }
@@ -591,12 +592,12 @@ class Story extends Model
 
             // Increment view counter
             $this->increment('views');
-            
+
             // Clear view-related caches
             Cache::forget("story.{$this->id}.stats");
             Cache::forget("story.{$this->id}.analytics");
         } catch (\Exception $e) {
-            \Log::error('Failed to record story view', [
+            Log::error('Failed to record story view', [
                 'story_id' => $this->id,
                 'error' => $e->getMessage(),
             ]);
@@ -751,7 +752,7 @@ class Story extends Model
     public function clearEnhancedCache(): void
     {
         $this->clearCache();
-        
+
         // Clear category cache
         if ($this->category_id) {
             Cache::forget("category.{$this->category_id}.stories");
@@ -830,15 +831,15 @@ class Story extends Model
         if ($days > 0) {
             return "{$days} يوم و {$hours} ساعة";
         }
-        
+
         if ($hours > 0) {
             return "{$hours} ساعة و {$minutes} دقيقة";
         }
-        
+
         if ($minutes > 0) {
             return "{$minutes} دقيقة";
         }
-        
+
         return "{$seconds} ثانية";
     }
 
@@ -899,12 +900,12 @@ class Story extends Model
                     ->get();
 
                 $genderStats = $viewers->groupBy('member.gender')->map->count();
-                
+
                 $ageGroups = $viewers->map(function ($view) {
                     if (!$view->member || !$view->member->date_of_birth) {
                         return 'unknown';
                     }
-                    
+
                     $age = $view->member->date_of_birth->age;
                     return match (true) {
                         $age < 18 => 'under_18',

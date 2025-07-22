@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 
 class MemberStoryInteraction extends Model
 {
@@ -157,7 +158,7 @@ class MemberStoryInteraction extends Model
     protected function actionIcon(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => match ($this->action) {
+            get: fn() => match ($this->action) {
                 self::ACTION_LIKE => '👍',
                 self::ACTION_DISLIKE => '👎',
                 self::ACTION_BOOKMARK => '🔖',
@@ -172,7 +173,7 @@ class MemberStoryInteraction extends Model
     protected function actionColor(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => match ($this->action) {
+            get: fn() => match ($this->action) {
                 self::ACTION_LIKE => 'success',
                 self::ACTION_DISLIKE => 'danger',
                 self::ACTION_BOOKMARK => 'warning',
@@ -187,7 +188,7 @@ class MemberStoryInteraction extends Model
     protected function actionLabel(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => match ($this->action) {
+            get: fn() => match ($this->action) {
                 self::ACTION_LIKE => 'Liked',
                 self::ACTION_DISLIKE => 'Disliked',
                 self::ACTION_BOOKMARK => 'Bookmarked',
@@ -202,21 +203,21 @@ class MemberStoryInteraction extends Model
     protected function isPositive(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => in_array($this->action, [self::ACTION_LIKE, self::ACTION_BOOKMARK, self::ACTION_SHARE])
+            get: fn() => in_array($this->action, [self::ACTION_LIKE, self::ACTION_BOOKMARK, self::ACTION_SHARE])
         );
     }
 
     protected function isNegative(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => in_array($this->action, [self::ACTION_DISLIKE, self::ACTION_REPORT])
+            get: fn() => in_array($this->action, [self::ACTION_DISLIKE, self::ACTION_REPORT])
         );
     }
 
     protected function timeAgo(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn () => $this->created_at?->diffForHumans() ?? 'Unknown'
+            get: fn() => $this->created_at?->diffForHumans() ?? 'Unknown'
         );
     }
 
@@ -271,7 +272,7 @@ class MemberStoryInteraction extends Model
 
     public static function getTrendingInteractions(int $days = 7, ?string $action = null): Collection
     {
-        $cacheKey = "trending_interactions_{$days}".($action ? "_{$action}" : '');
+        $cacheKey = "trending_interactions_{$days}" . ($action ? "_{$action}" : '');
 
         return cache()->remember($cacheKey, 300, function () use ($days, $action) {
             $query = self::with(['story:id,title,slug', 'member:id,name'])
@@ -407,7 +408,7 @@ class MemberStoryInteraction extends Model
 
             return true;
         } catch (\Exception $e) {
-            \Log::error('Failed to toggle interaction action', [
+            Log::error('Failed to toggle interaction action', [
                 'interaction_id' => $this->id,
                 'current_action' => $this->action,
                 'error' => $e->getMessage(),
@@ -425,7 +426,7 @@ class MemberStoryInteraction extends Model
 
             return $this->update(['metadata' => $metadata]);
         } catch (\Exception $e) {
-            \Log::error('Failed to add interaction metadata', [
+            Log::error('Failed to add interaction metadata', [
                 'interaction_id' => $this->id,
                 'data' => $data,
                 'error' => $e->getMessage(),
@@ -488,7 +489,7 @@ class MemberStoryInteraction extends Model
         return [
             'member_id' => 'required|integer|exists:members,id',
             'story_id' => 'required|integer|exists:stories,id',
-            'action' => 'required|string|in:'.implode(',', self::VALID_ACTIONS),
+            'action' => 'required|string|in:' . implode(',', self::VALID_ACTIONS),
             'metadata' => 'nullable|array',
         ];
     }
@@ -498,7 +499,7 @@ class MemberStoryInteraction extends Model
         return [
             'member_id.exists' => 'The selected member does not exist.',
             'story_id.exists' => 'The selected story does not exist.',
-            'action.in' => 'The action must be one of: '.implode(', ', self::VALID_ACTIONS),
+            'action.in' => 'The action must be one of: ' . implode(', ', self::VALID_ACTIONS),
         ];
     }
 
@@ -510,7 +511,7 @@ class MemberStoryInteraction extends Model
 
     public function getFilamentName(): string
     {
-        return $this->member?->name.' → '.$this->story?->title.' ('.$this->action_label.')';
+        return $this->member?->name . ' → ' . $this->story?->title . ' (' . $this->action_label . ')';
     }
 
     public function getActionBadgeColor(): string
@@ -534,7 +535,7 @@ class MemberStoryInteraction extends Model
         }
 
         if (! empty($errors)) {
-            \Log::warning('Some bulk interactions failed', ['errors' => $errors]);
+            Log::warning('Some bulk interactions failed', ['errors' => $errors]);
         }
 
         return $created;

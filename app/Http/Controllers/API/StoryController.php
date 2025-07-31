@@ -55,7 +55,7 @@ class StoryController extends Controller
                 ->where('active_from', '<=', now())
                 ->where(function (Builder $q) {
                     $q->whereNull('active_until')
-                      ->orWhere('active_until', '>', now());
+                        ->orWhere('active_until', '>', now());
                 })
                 ->with([
                     'category:id,name,slug',
@@ -63,9 +63,17 @@ class StoryController extends Controller
                     'ratingAggregate:story_id,average_rating,total_ratings'
                 ])
                 ->select([
-                    'id', 'title', 'excerpt', 'image', 'category_id',
-                    'views', 'reading_time_minutes', 'active_from',
-                    'created_at', 'updated_at'
+                    'id',
+                    'title',
+                    'excerpt',
+                    'image',
+                    'category_id',
+                    'views',
+                    'reading_time_minutes',
+                    'active_from',
+                    'active_until',
+                    'created_at',
+                    'updated_at'
                 ]);
 
             // Secure category filter
@@ -78,14 +86,14 @@ class StoryController extends Controller
                 $searchTerm = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($search));
                 $query->where(function (Builder $q) use ($searchTerm) {
                     $q->where('title', 'LIKE', "%{$searchTerm}%")
-                      ->orWhere('excerpt', 'LIKE', "%{$searchTerm}%");
+                        ->orWhere('excerpt', 'LIKE', "%{$searchTerm}%");
                 });
             }
 
             // Secure sorting with whitelist
             $allowedSorts = ['created_at', 'views', 'title'];
             $allowedOrders = ['asc', 'desc'];
-            
+
             if (in_array($sortBy, $allowedSorts) && in_array($sortOrder, $allowedOrders)) {
                 if ($sortBy === 'title') {
                     $query->orderByRaw("LOWER(title) {$sortOrder}");
@@ -119,6 +127,7 @@ class StoryController extends Controller
                     'rating' => $this->transformRating($story->ratingAggregate),
 
                     'active_from' => $story->active_from?->toISOString(),
+                    'active_until' => $story->active_until?->toISOString(),
                     'created_at' => $story->created_at->toISOString(),
                 ];
             });
@@ -149,7 +158,6 @@ class StoryController extends Controller
                     ]),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Stories index error', [
                 'error' => $e->getMessage(),
@@ -173,9 +181,11 @@ class StoryController extends Controller
     {
         try {
             // Check story availability
-            if (!$story->active ||
+            if (
+                !$story->active ||
                 ($story->active_from && $story->active_from > now()) ||
-                ($story->active_until && $story->active_until < now())) {
+                ($story->active_until && $story->active_until < now())
+            ) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Story not available',
@@ -208,7 +218,7 @@ class StoryController extends Controller
                 ]),
                 'views' => $story->views,
                 'reading_time_minutes' => $story->reading_time_minutes,
-'rating' => $this->transformRating($story->ratingAggregate),
+                'rating' => $this->transformRating($story->ratingAggregate),
 
                 'active_from' => $story->active_from?->toISOString(),
                 'active_until' => $story->active_until?->toISOString(),
@@ -226,7 +236,6 @@ class StoryController extends Controller
                 'success' => true,
                 'data' => $storyData,
             ]);
-
         } catch (\Exception $e) {
             Log::error('Story show error', [
                 'story_id' => $story->id,
@@ -257,19 +266,25 @@ class StoryController extends Controller
                     ->where('active_from', '<=', now())
                     ->where(function (Builder $q) {
                         $q->whereNull('active_until')
-                          ->orWhere('active_until', '>', now());
+                            ->orWhere('active_until', '>', now());
                     })
                     ->where(function (Builder $q) {
                         $q->where('is_featured', true)
-                          ->orWhere('views', '>', 1000); // High view count as featured
+                            ->orWhere('views', '>', 1000); // High view count as featured
                     })
                     ->with([
                         'category:id,name,slug',
                         'ratingAggregate:story_id,average_rating,total_ratings'
                     ])
                     ->select([
-                        'id', 'title', 'excerpt', 'image', 'category_id',
-                        'views', 'reading_time_minutes', 'created_at'
+                        'id',
+                        'title',
+                        'excerpt',
+                        'image',
+                        'category_id',
+                        'views',
+                        'reading_time_minutes',
+                        'created_at'
                     ])
                     ->orderByDesc('views')
                     ->limit($limit)
@@ -288,7 +303,7 @@ class StoryController extends Controller
                     ] : null,
                     'views' => $story->views,
                     'reading_time_minutes' => $story->reading_time_minutes,
-'rating' => $this->transformRating($story->ratingAggregate),
+                    'rating' => $this->transformRating($story->ratingAggregate),
 
                     'created_at' => $story->created_at->toISOString(),
                 ];
@@ -302,7 +317,6 @@ class StoryController extends Controller
                     'type' => 'featured',
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Featured stories error', ['error' => $e->getMessage()]);
 
@@ -337,7 +351,7 @@ class StoryController extends Controller
             $limit = $request->integer('limit', 10);
             $period = $request->input('period', '7days');
 
-            $days = match($period) {
+            $days = match ($period) {
                 '24hours' => 1,
                 '7days' => 7,
                 '30days' => 30,
@@ -352,7 +366,7 @@ class StoryController extends Controller
                     ->where('created_at', '>=', now()->subDays($days))
                     ->where(function (Builder $q) {
                         $q->whereNull('active_until')
-                          ->orWhere('active_until', '>', now());
+                            ->orWhere('active_until', '>', now());
                     })
                     ->withCount(['storyViews as recent_views' => function ($query) use ($days) {
                         $query->where('viewed_at', '>=', now()->subDays($days));
@@ -362,8 +376,14 @@ class StoryController extends Controller
                         'ratingAggregate:story_id,average_rating,total_ratings'
                     ])
                     ->select([
-                        'id', 'title', 'excerpt', 'image', 'category_id',
-                        'views', 'reading_time_minutes', 'created_at'
+                        'id',
+                        'title',
+                        'excerpt',
+                        'image',
+                        'category_id',
+                        'views',
+                        'reading_time_minutes',
+                        'created_at'
                     ])
                     ->having('recent_views', '>', 0)
                     ->orderByDesc('recent_views')
@@ -384,7 +404,7 @@ class StoryController extends Controller
                     'views' => $story->views,
                     'recent_views' => $story->recent_views ?? 0,
                     'reading_time_minutes' => $story->reading_time_minutes,
-'rating' => $this->transformRating($story->ratingAggregate),
+                    'rating' => $this->transformRating($story->ratingAggregate),
 
                     'created_at' => $story->created_at->toISOString(),
                 ];
@@ -399,7 +419,6 @@ class StoryController extends Controller
                     'type' => 'trending',
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Trending stories error', ['error' => $e->getMessage()]);
 
@@ -419,16 +438,16 @@ class StoryController extends Controller
     {
         try {
             $cacheKey = 'story_categories_with_counts';
-            
+
             $categories = Cache::remember($cacheKey, self::CACHE_LONG, function () {
                 return Category::query()
                     ->withCount(['stories as active_stories_count' => function ($query) {
                         $query->where('active', true)
-                              ->where('active_from', '<=', now())
-                              ->where(function (Builder $q) {
-                                  $q->whereNull('active_until')
+                            ->where('active_from', '<=', now())
+                            ->where(function (Builder $q) {
+                                $q->whereNull('active_until')
                                     ->orWhere('active_until', '>', now());
-                              });
+                            });
                     }])
                     ->having('active_stories_count', '>', 0)
                     ->orderBy('name')
@@ -452,7 +471,6 @@ class StoryController extends Controller
                     'total_categories' => $transformedCategories->count(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Story categories error', ['error' => $e->getMessage()]);
 
@@ -497,11 +515,11 @@ class StoryController extends Controller
                 ->where('active_from', '<=', now())
                 ->where(function (Builder $q) {
                     $q->whereNull('active_until')
-                      ->orWhere('active_until', '>', now());
+                        ->orWhere('active_until', '>', now());
                 })
                 ->where(function (Builder $q) use ($searchTerm) {
                     $q->where('title', 'LIKE', "%{$searchTerm}%")
-                      ->orWhere('excerpt', 'LIKE', "%{$searchTerm}%");
+                        ->orWhere('excerpt', 'LIKE', "%{$searchTerm}%");
                 });
 
             if ($categoryId) {
@@ -514,8 +532,14 @@ class StoryController extends Controller
                     'ratingAggregate:story_id,average_rating,total_ratings'
                 ])
                 ->select([
-                    'id', 'title', 'excerpt', 'image', 'category_id',
-                    'views', 'reading_time_minutes', 'created_at'
+                    'id',
+                    'title',
+                    'excerpt',
+                    'image',
+                    'category_id',
+                    'views',
+                    'reading_time_minutes',
+                    'created_at'
                 ])
                 ->orderByDesc('views')
                 ->paginate($perPage);
@@ -556,7 +580,6 @@ class StoryController extends Controller
                     'total_results' => $results->total(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Story search error', [
                 'query' => $request->input('q'),
@@ -665,7 +688,6 @@ class StoryController extends Controller
                     ],
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Record view error', [
                 'story_id' => $story->id,
@@ -717,7 +739,6 @@ class StoryController extends Controller
                     'submitted_at' => now()->toISOString(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Submit rating error', [
                 'story_id' => $story->id,
@@ -757,7 +778,6 @@ class StoryController extends Controller
                     'status' => $this->getProgressStatus($progress?->reading_progress ?? 0),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Get reading progress error', [
                 'story_id' => $story->id,
@@ -818,7 +838,6 @@ class StoryController extends Controller
                     'updated_at' => $progressRecord->updated_at->toISOString(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Update reading progress error', [
                 'story_id' => $story->id,
@@ -857,7 +876,7 @@ class StoryController extends Controller
             $period = $request->input('period', '30days');
             $includeDetailed = $request->boolean('include_detailed', false);
 
-            $days = match($period) {
+            $days = match ($period) {
                 '7days' => 7,
                 '30days' => 30,
                 '90days' => 90,
@@ -905,7 +924,6 @@ class StoryController extends Controller
                     'generated_at' => now()->toISOString(),
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Story analytics error', [
                 'story_id' => $story->id,
@@ -945,7 +963,7 @@ class StoryController extends Controller
         // Add interaction data to each story
         $stories->transform(function ($story) use ($ratings, $interactions) {
             $storyInteractions = $interactions[$story['id']] ?? [];
-            
+
             $story['member_interactions'] = [
                 'has_rated' => $ratings->has($story['id']),
                 'rating' => $ratings->get($story['id']),
@@ -1037,7 +1055,7 @@ class StoryController extends Controller
     private function detectPlatform(?string $userAgent): string
     {
         if (!$userAgent) return 'Unknown';
-        
+
         return match (true) {
             str_contains($userAgent, 'iPhone') || str_contains($userAgent, 'iPad') => 'iOS',
             str_contains($userAgent, 'Android') => 'Android',
@@ -1051,7 +1069,7 @@ class StoryController extends Controller
     private function detectBrowser(?string $userAgent): string
     {
         if (!$userAgent) return 'Unknown';
-        
+
         return match (true) {
             str_contains($userAgent, 'Chrome') => 'Chrome',
             str_contains($userAgent, 'Firefox') => 'Firefox',
@@ -1147,49 +1165,48 @@ class StoryController extends Controller
 
 
     /**
- * Safely get numeric value for rating
- */
-private function getNumericRating($value): float
-{
-    if (is_null($value)) {
+     * Safely get numeric value for rating
+     */
+    private function getNumericRating($value): float
+    {
+        if (is_null($value)) {
+            return 0.0;
+        }
+
+        // Convert to float if it's a string
+        if (is_string($value)) {
+            return (float) $value;
+        }
+
+        // If it's already numeric, return as float
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        // Default fallback
         return 0.0;
     }
-    
-    // Convert to float if it's a string
-    if (is_string($value)) {
-        return (float) $value;
-    }
-    
-    // If it's already numeric, return as float
-    if (is_numeric($value)) {
-        return (float) $value;
-    }
-    
-    // Default fallback
-    return 0.0;
-}
 
-/**
- * Transform story rating data safely
- */
-private function transformRating($ratingAggregate): array
-{
-    if (!$ratingAggregate) {
+    /**
+     * Transform story rating data safely
+     */
+    private function transformRating($ratingAggregate): array
+    {
+        if (!$ratingAggregate) {
+            return [
+                'average' => 0.0,
+                'total' => 0,
+                'distribution' => []
+            ];
+        }
+
+        // Safely convert average_rating to float before rounding
+        $averageRating = $this->getNumericRating($ratingAggregate->average_rating);
+
         return [
-            'average' => 0.0,
-            'total' => 0,
-            'distribution' => []
+            'average' => round($averageRating, 1),
+            'total' => (int) ($ratingAggregate->total_ratings ?? 0),
+            'distribution' => $ratingAggregate->rating_distribution ?? []
         ];
     }
-    
-    // Safely convert average_rating to float before rounding
-    $averageRating = $this->getNumericRating($ratingAggregate->average_rating);
-    
-    return [
-        'average' => round($averageRating, 1),
-        'total' => (int) ($ratingAggregate->total_ratings ?? 0),
-        'distribution' => $ratingAggregate->rating_distribution ?? []
-    ];
-}
-
 }

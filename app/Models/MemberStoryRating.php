@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -7,36 +9,68 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
+/**
+ * Member Story Rating Model - Enhanced with Filament Integration
+ *
+ * @property int $id
+ * @property int $member_id
+ * @property int $story_id
+ * @property int $rating
+ * @property string|null $comment
+ * @property bool $is_verified
+ * @property int $helpful_count
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ *
+ * @property-read Member $member
+ * @property-read Story $story
+ * @property-read StoryRatingAggregate $aggregate
+ */
 class MemberStoryRating extends Model
 {
     use HasFactory;
 
-    // ✅ IMPROVED: Rating system constants for validation
+    /**
+     * Rating system constants for validation
+     */
     public const MIN_RATING = 1;
-
     public const MAX_RATING = 5;
-
     public const VALID_RATINGS = [1, 2, 3, 4, 5];
 
-    // ✅ IMPROVED: Rating classification constants
+    /**
+     * Rating classification constants
+     */
     public const HIGH_RATING_THRESHOLD = 4;
-
     public const LOW_RATING_THRESHOLD = 2;
-
     public const NEUTRAL_RATING = 3;
 
+    /**
+     * Cache TTL constants
+     */
+    private const CACHE_SHORT = 300; // 5 minutes
+    private const CACHE_MEDIUM = 900; // 15 minutes
+    private const CACHE_LONG = 3600; // 1 hour
+
+    /**
+     * The attributes that are mass assignable.
+     */
     protected $fillable = [
         'member_id',
         'story_id',
         'rating',
         'comment',
-        'is_verified', // ✅ NEW: For verified ratings
-        'helpful_count', // ✅ NEW: For rating helpfulness
+        'is_verified',
+        'helpful_count',
     ];
 
-    // ✅ IMPROVED: Enhanced casting with better types
+    /**
+     * The attributes that should be cast.
+     */
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -49,7 +83,7 @@ class MemberStoryRating extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | RELATIONSHIPS - ✅ OPTIMIZED with better performance
+    | RELATIONSHIPS - Optimized with better performance
     |--------------------------------------------------------------------------
     */
 
@@ -70,7 +104,7 @@ class MemberStoryRating extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | SCOPES - ✅ IMPROVED with comprehensive filtering options
+    | SCOPES - Comprehensive filtering options
     |--------------------------------------------------------------------------
     */
 
@@ -96,9 +130,14 @@ class MemberStoryRating extends Model
             ->where('comment', '!=', ' ');
     }
 
-    public function scopeRecent(Builder $query, int $days = 7): Builder
+    public function scopeVerified(Builder $query): Builder
     {
-        return $query->where('created_at', '>=', now()->subDays($days));
+        return $query->where('is_verified', true);
+    }
+
+    public function scopeUnverified(Builder $query): Builder
+    {
+        return $query->where('is_verified', false);
     }
 
     public function scopeHighRatings(Builder $query): Builder
@@ -111,313 +150,213 @@ class MemberStoryRating extends Model
         return $query->where('rating', '<=', self::LOW_RATING_THRESHOLD);
     }
 
-    // ✅ NEW: Additional useful scopes
-    public function scopeExcellent(Builder $query): Builder
+    public function scopeRecent(Builder $query, int $days = 7): Builder
     {
-        return $query->where('rating', self::MAX_RATING);
+        return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    public function scopePoor(Builder $query): Builder
-    {
-        return $query->where('rating', self::MIN_RATING);
-    }
-
-    public function scopeNeutral(Builder $query): Builder
-    {
-        return $query->where('rating', self::NEUTRAL_RATING);
-    }
-
-    public function scopeVerified(Builder $query): Builder
-    {
-        return $query->where('is_verified', true);
-    }
-
-    public function scopeHelpful(Builder $query, int $minHelpfulCount = 1): Builder
+    public function scopePopular(Builder $query, int $minHelpfulCount = 5): Builder
     {
         return $query->where('helpful_count', '>=', $minHelpfulCount);
     }
 
-    public function scopeDetailed(Builder $query, int $minCommentLength = 50): Builder
+    /*
+    |--------------------------------------------------------------------------
+    | ACCESSORS - Better data presentation
+    |--------------------------------------------------------------------------
+    */
+
+    public function getRatingLabelAttribute(): string
     {
-        return $query->whereNotNull('comment')
-            ->whereRaw('LENGTH(comment) >= ?', [$minCommentLength]);
+        $labels = [
+            1 => 'Poor',
+            2 => 'Fair',
+            3 => 'Good',
+            4 => 'Very Good',
+            5 => 'Excellent',
+        ];
+
+        return $labels[$this->rating] ?? 'Unknown';
     }
 
-    public function scopeRatingRange(Builder $query, int $min, int $max): Builder
+    public function getRatingColorAttribute(): string
     {
-        return $query->whereBetween('rating', [$min, $max]);
+        $colors = [
+            1 => 'danger',
+            2 => 'warning',
+            3 => 'gray',
+            4 => 'success',
+            5 => 'success',
+        ];
+
+        return $colors[$this->rating] ?? 'gray';
+    }
+
+    public function getStarsDisplayAttribute(): string
+    {
+        return str_repeat('⭐', $this->rating) . str_repeat('☆', 5 - $this->rating);
+    }
+
+    public function getIsHighRatingAttribute(): bool
+    {
+        return $this->rating >= self::HIGH_RATING_THRESHOLD;
+    }
+
+    public function getIsLowRatingAttribute(): bool
+    {
+        return $this->rating <= self::LOW_RATING_THRESHOLD;
+    }
+
+    public function getHasCommentAttribute(): bool
+    {
+        return !empty(trim($this->comment ?? ''));
+    }
+
+    public function getCommentExcerptAttribute(): ?string
+    {
+        if (!$this->has_comment) {
+            return null;
+        }
+
+        return strlen($this->comment) > 100
+            ? substr($this->comment, 0, 97) . '...'
+            : $this->comment;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | ACCESSORS - ✅ IMPROVED with Laravel 9+ syntax and enhanced logic
+    | STATIC METHODS - Enhanced aggregate operations
     |--------------------------------------------------------------------------
     */
 
-    protected function ratingStars(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: function () {
-                $filled = str_repeat('⭐', $this->rating);
-                $empty = str_repeat('☆', self::MAX_RATING - $this->rating);
-
-                return $filled . $empty;
-            }
-        );
-    }
-
-    protected function ratingColor(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => match ($this->rating) {
-                5 => 'success',
-                4 => 'info',
-                3 => 'warning',
-                2 => 'orange',
-                1 => 'danger',
-                default => 'gray'
-            }
-        );
-    }
-
-    protected function hasComment(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => ! empty(trim($this->comment))
-        );
-    }
-
-    protected function ratingLevel(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => match ($this->rating) {
-                5 => 'excellent',
-                4 => 'good',
-                3 => 'average',
-                2 => 'poor',
-                1 => 'terrible',
-                default => 'unrated'
-            }
-        );
-    }
-
-    protected function commentLength(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => $this->comment ? strlen(trim($this->comment)) : 0
-        );
-    }
-
-    protected function isPositive(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => $this->rating >= self::HIGH_RATING_THRESHOLD
-        );
-    }
-
-    protected function isNegative(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => $this->rating <= self::LOW_RATING_THRESHOLD
-        );
-    }
-
-    protected function timeAgo(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => $this->created_at?->diffForHumans() ?? 'Unknown'
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | STATIC METHODS - ✅ IMPROVED with caching and comprehensive analytics
-    |--------------------------------------------------------------------------
-    */
-
-    public static function updateStoryAggregate(int $storyId): void
+    public static function updateStoryAggregate(int $storyId): bool
     {
         try {
             $ratings = self::where('story_id', $storyId)->get();
 
+            if ($ratings->isEmpty()) {
+                // Delete aggregate if no ratings exist
+                StoryRatingAggregate::where('story_id', $storyId)->delete();
+                return true;
+            }
+
             $totalRatings = $ratings->count();
             $sumRatings = $ratings->sum('rating');
-            $averageRating = $totalRatings > 0 ? round($sumRatings / $totalRatings, 2) : 0;
+            $averageRating = round($sumRatings / $totalRatings, 2);
 
-            // Distribution calculation
+            // Calculate distribution
             $distribution = [];
-            for ($i = self::MIN_RATING; $i <= self::MAX_RATING; $i++) {
+            for ($i = 1; $i <= 5; $i++) {
                 $distribution[$i] = $ratings->where('rating', $i)->count();
             }
 
-            // ✅ IMPROVED: Additional aggregate metrics
+            // Calculate verified ratings
             $verifiedRatings = $ratings->where('is_verified', true);
-            $ratingsWithComments = $ratings->filter(fn($r) => ! empty(trim($r->comment)));
+            $verifiedCount = $verifiedRatings->count();
+            $verifiedAverage = $verifiedCount > 0
+                ? round($verifiedRatings->sum('rating') / $verifiedCount, 2)
+                : 0;
 
-            \App\Models\StoryRatingAggregate::updateOrCreate(
+            // Comments count
+            $commentsCount = $ratings->whereNotNull('comment')
+                ->where('comment', '!=', '')
+                ->count();
+
+            StoryRatingAggregate::updateOrCreate(
                 ['story_id' => $storyId],
                 [
                     'total_ratings' => $totalRatings,
                     'sum_ratings' => $sumRatings,
                     'average_rating' => $averageRating,
                     'rating_distribution' => $distribution,
-                    'verified_ratings_count' => $verifiedRatings->count(),
-                    'verified_average_rating' => $verifiedRatings->count() > 0
-                        ? round($verifiedRatings->avg('rating'), 2)
-                        : 0,
-                    'comments_count' => $ratingsWithComments->count(),
+                    'verified_ratings_count' => $verifiedCount,
+                    'verified_average_rating' => $verifiedAverage,
+                    'comments_count' => $commentsCount,
                     'last_rated_at' => $ratings->max('created_at'),
                 ]
             );
 
-            // ✅ IMPROVED: Clear related caches
-            cache()->forget("story_rating_stats_{$storyId}");
-            cache()->forget("story_ratings_analysis_{$storyId}");
+            // Clear related caches
+            Cache::forget("story_ratings_{$storyId}");
+            Cache::forget("story_rating_stats_{$storyId}");
+
+            return true;
         } catch (\Exception $e) {
             Log::error('Failed to update story rating aggregate', [
                 'story_id' => $storyId,
                 'error' => $e->getMessage(),
             ]);
+
+            return false;
         }
     }
 
-    public static function getStoryRatingStats(int $storyId): array
+    public static function getPopularRatings(int $limit = 10): Collection
     {
-        return cache()->remember("story_rating_stats_{$storyId}", 600, function () use ($storyId) {
-            $aggregate = \App\Models\StoryRatingAggregate::where('story_id', $storyId)->first();
-
-            if (! $aggregate) {
-                return [
-                    'average_rating' => 0,
-                    'total_ratings' => 0,
-                    'rating_distribution' => array_fill_keys(self::VALID_RATINGS, 0),
-                    'recent_ratings' => collect(),
-                    'comments_count' => 0,
-                    'verified_ratings_count' => 0,
-                    'sentiment_analysis' => self::getDefaultSentimentAnalysis(),
-                ];
-            }
-
-            $recentRatings = self::where('story_id', $storyId)
-                ->with(['member:id,name'])
-                ->orderByDesc('created_at')
-                ->limit(10)
-                ->get();
-
-            return [
-                'average_rating' => $aggregate->average_rating,
-                'total_ratings' => $aggregate->total_ratings,
-                'verified_average_rating' => $aggregate->verified_average_rating ?? 0,
-                'verified_ratings_count' => $aggregate->verified_ratings_count ?? 0,
-                'rating_distribution' => $aggregate->rating_distribution,
-                'recent_ratings' => $recentRatings,
-                'comments_count' => $aggregate->comments_count ?? 0,
-                'last_rated_at' => $aggregate->last_rated_at,
-                'sentiment_analysis' => self::calculateSentimentAnalysis($storyId),
-                'rating_trends' => self::getRatingTrends($storyId),
-            ];
-        });
-    }
-
-    public static function getMemberRating(int $memberId, int $storyId): ?self
-    {
-        return cache()->remember("member_rating_{$memberId}_{$storyId}", 300, function () use ($memberId, $storyId) {
-            return self::where([
-                'member_id' => $memberId,
-                'story_id' => $storyId,
-            ])->first();
-        });
-    }
-
-    // ✅ NEW: Advanced analytics methods
-    public static function calculateSentimentAnalysis(int $storyId): array
-    {
-        return cache()->remember("story_ratings_analysis_{$storyId}", 1800, function () use ($storyId) {
-            $ratings = self::where('story_id', $storyId)->get();
-
-            if ($ratings->isEmpty()) {
-                return self::getDefaultSentimentAnalysis();
-            }
-
-            $total = $ratings->count();
-            $positive = $ratings->where('rating', '>=', self::HIGH_RATING_THRESHOLD)->count();
-            $negative = $ratings->where('rating', '<=', self::LOW_RATING_THRESHOLD)->count();
-            $neutral = $total - $positive - $negative;
-
-            return [
-                'positive_percentage' => round(($positive / $total) * 100, 1),
-                'negative_percentage' => round(($negative / $total) * 100, 1),
-                'neutral_percentage' => round(($neutral / $total) * 100, 1),
-                'sentiment_score' => round((($positive - $negative) / $total) * 100, 2),
-                'recommendation_rate' => round(($positive / $total) * 100, 1),
-            ];
-        });
-    }
-
-    public static function getRatingTrends(int $storyId, int $days = 30): array
-    {
-        return cache()->remember("story_rating_trends_{$storyId}_{$days}", 1800, function () use ($storyId, $days) {
-            return self::where('story_id', $storyId)
-                ->where('created_at', '>=', now()->subDays($days))
-                ->selectRaw('DATE(created_at) as date, AVG(rating) as avg_rating, COUNT(*) as count')
-                ->groupBy('date')
-                ->orderBy('date')
-                ->get()
-                ->map(function ($item) {
-                    return [
-                        'date' => $item->date,
-                        'average_rating' => round($item->avg_rating, 2),
-                        'ratings_count' => $item->count,
-                    ];
-                })
-                ->toArray();
-        });
-    }
-
-    public static function getTopRatedStories(int $limit = 10, int $minRatings = 5): Collection
-    {
-        return cache()->remember("top_rated_stories_{$limit}_{$minRatings}", 1800, function () use ($limit, $minRatings) {
-            return \App\Models\StoryRatingAggregate::with(['story:id,title,slug'])
-                ->where('total_ratings', '>=', $minRatings)
-                ->orderByDesc('average_rating')
-                ->orderByDesc('total_ratings')
+        return Cache::remember("popular_ratings_{$limit}", self::CACHE_MEDIUM, function () use ($limit) {
+            return self::with(['member', 'story'])
+                ->where('helpful_count', '>', 0)
+                ->orderBy('helpful_count', 'desc')
+                ->orderBy('created_at', 'desc')
                 ->limit($limit)
                 ->get();
         });
     }
 
-    public static function getMostActiveRaters(int $limit = 10): Collection
+    public static function getRatingDistribution(int|null $storyId = null): array
     {
-        return cache()->remember("most_active_raters_{$limit}", 1800, function () use ($limit) {
-            return self::with(['member:id,name,email'])
-                ->selectRaw('member_id, COUNT(*) as ratings_count, AVG(rating) as avg_rating, COUNT(CASE WHEN comment IS NOT NULL AND comment != "" THEN 1 END) as comments_count')
-                ->groupBy('member_id')
-                ->having('ratings_count', '>', 0)
-                ->orderByDesc('ratings_count')
-                ->limit($limit)
-                ->get();
-        });
-    }
+        $query = self::query();
 
-    public static function getRatingDistributionGlobal(): array
-    {
-        return cache()->remember('global_rating_distribution', 3600, function () {
+        if ($storyId) {
+            $query->where('story_id', $storyId);
+        }
+
+        return Cache::remember("rating_distribution_{$storyId}", self::CACHE_MEDIUM, function () use ($query) {
+            $total = $query->count();
             $distribution = [];
-            for ($i = self::MIN_RATING; $i <= self::MAX_RATING; $i++) {
-                $distribution[$i] = self::where('rating', $i)->count();
-            }
-
-            $total = array_sum($distribution);
             $percentages = [];
-            foreach ($distribution as $rating => $count) {
-                $percentages[$rating] = $total > 0 ? round(($count / $total) * 100, 1) : 0;
+
+            for ($i = 1; $i <= 5; $i++) {
+                $count = (clone $query)->where('rating', $i)->count();
+                $distribution[$i] = $count;
+                $percentages[$i] = $total > 0 ? round(($count / $total) * 100, 1) : 0;
             }
 
             return [
                 'counts' => $distribution,
                 'percentages' => $percentages,
                 'total_ratings' => $total,
-                'average_rating' => $total > 0 ? round(self::avg('rating'), 2) : 0,
+                'average_rating' => $total > 0 ? round($query->avg('rating'), 2) : 0,
+            ];
+        });
+    }
+
+    public static function getSentimentAnalysis(int|null $storyId = null): array
+    {
+        $query = self::query()->whereNotNull('comment');
+
+        if ($storyId) {
+            $query->where('story_id', $storyId);
+        }
+
+        return Cache::remember("rating_sentiment_{$storyId}", self::CACHE_LONG, function () use ($query) {
+            $ratings = $query->get();
+
+            if ($ratings->isEmpty()) {
+                return self::getDefaultSentimentAnalysis();
+            }
+
+            $positive = $ratings->where('rating', '>=', 4)->count();
+            $negative = $ratings->where('rating', '<=', 2)->count();
+            $neutral = $ratings->where('rating', 3)->count();
+            $total = $ratings->count();
+
+            return [
+                'positive_percentage' => $total > 0 ? round(($positive / $total) * 100, 1) : 0,
+                'negative_percentage' => $total > 0 ? round(($negative / $total) * 100, 1) : 0,
+                'neutral_percentage' => $total > 0 ? round(($neutral / $total) * 100, 1) : 0,
+                'sentiment_score' => $total > 0 ? round($ratings->avg('rating'), 2) : 0,
+                'recommendation_rate' => $total > 0 ? round(($positive / $total) * 100, 1) : 0,
             ];
         });
     }
@@ -435,14 +374,14 @@ class MemberStoryRating extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | INSTANCE METHODS - ✅ IMPROVED with better functionality
+    | INSTANCE METHODS - Enhanced functionality
     |--------------------------------------------------------------------------
     */
 
     public function markAsHelpful(): bool
     {
         try {
-            return $this->increment('helpful_count');
+            return (bool) $this->increment('helpful_count');
         } catch (\Exception $e) {
             Log::error('Failed to mark rating as helpful', [
                 'rating_id' => $this->id,
@@ -459,6 +398,7 @@ class MemberStoryRating extends Model
             $result = $this->update(['is_verified' => true]);
             if ($result) {
                 self::updateStoryAggregate($this->story_id);
+                Cache::forget("member_rating_{$this->member_id}_{$this->story_id}");
             }
 
             return $result;
@@ -472,21 +412,25 @@ class MemberStoryRating extends Model
         }
     }
 
-    public function updateRating(int $newRating, ?string $newComment = null): bool
+    public function updateRating(int $newRating, string|null $newComment = null): bool
     {
         try {
-            if (! in_array($newRating, self::VALID_RATINGS)) {
+            if (!in_array($newRating, self::VALID_RATINGS)) {
                 throw new \InvalidArgumentException('Invalid rating value');
             }
 
             $updateData = ['rating' => $newRating];
             if ($newComment !== null) {
                 $updateData['comment'] = trim($newComment);
+                if (empty($updateData['comment'])) {
+                    $updateData['comment'] = null;
+                }
             }
 
             $result = $this->update($updateData);
             if ($result) {
                 self::updateStoryAggregate($this->story_id);
+                Cache::forget("member_rating_{$this->member_id}_{$this->story_id}");
             }
 
             return $result;
@@ -503,7 +447,7 @@ class MemberStoryRating extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | MODEL EVENTS - ✅ IMPROVED with better performance and caching
+    | MODEL EVENTS - Enhanced with better performance and caching
     |--------------------------------------------------------------------------
     */
 
@@ -511,7 +455,7 @@ class MemberStoryRating extends Model
     {
         static::saving(function ($rating) {
             // Validate rating value
-            if (! in_array($rating->rating, self::VALID_RATINGS)) {
+            if (!in_array($rating->rating, self::VALID_RATINGS)) {
                 throw new \InvalidArgumentException('Rating must be between ' . self::MIN_RATING . ' and ' . self::MAX_RATING);
             }
 
@@ -527,16 +471,16 @@ class MemberStoryRating extends Model
         static::saved(function ($rating) {
             // Update aggregates and clear caches
             self::updateStoryAggregate($rating->story_id);
-            cache()->forget("member_rating_{$rating->member_id}_{$rating->story_id}");
+            Cache::forget("member_rating_{$rating->member_id}_{$rating->story_id}");
         });
 
         static::deleted(function ($rating) {
             // Update aggregates and clear caches
             self::updateStoryAggregate($rating->story_id);
-            cache()->forget("member_rating_{$rating->member_id}_{$rating->story_id}");
+            Cache::forget("member_rating_{$rating->member_id}_{$rating->story_id}");
         });
 
-        // ✅ NEW: Prevent duplicate ratings
+        // Prevent duplicate ratings
         static::creating(function ($rating) {
             $existing = self::where('member_id', $rating->member_id)
                 ->where('story_id', $rating->story_id)
@@ -550,7 +494,7 @@ class MemberStoryRating extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | VALIDATION - ✅ IMPROVED with comprehensive rules
+    | VALIDATION - Comprehensive rules
     |--------------------------------------------------------------------------
     */
 
@@ -579,39 +523,87 @@ class MemberStoryRating extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | FILAMENT INTEGRATION - ✅ NEW for better admin interface
+    | FILAMENT INTEGRATION - Enhanced for better admin interface
     |--------------------------------------------------------------------------
     */
 
     public function getFilamentName(): string
     {
-        return $this->member?->name . ' → ' . $this->story?->title . ' (' . $this->rating . '⭐)';
+        return $this->member?->name . ' → ' . $this->story?->title . ' (' . $this->rating . '/5)';
     }
 
-    public function getRatingBadgeColor(): string
+    public function getFilamentBadgeColor(): string
     {
         return $this->rating_color;
     }
 
-    // ✅ NEW: Bulk operations for admin efficiency
+    public function getFilamentDescription(): string
+    {
+        $parts = [];
+        $parts[] = $this->stars_display;
+
+        if ($this->is_verified) {
+            $parts[] = '✅ Verified';
+        }
+
+        if ($this->helpful_count > 0) {
+            $parts[] = "👍 {$this->helpful_count} helpful";
+        }
+
+        if ($this->has_comment) {
+            $parts[] = '💬 Has comment';
+        }
+
+        return implode(' | ', $parts);
+    }
+
+    /**
+     * Bulk operations for admin efficiency
+     */
     public static function bulkVerifyRatings(array $ratingIds): int
     {
         try {
-            $verified = self::whereIn('id', $ratingIds)
+            $updated = self::whereIn('id', $ratingIds)
                 ->update(['is_verified' => true]);
 
             // Update aggregates for affected stories
             $storyIds = self::whereIn('id', $ratingIds)
-                ->distinct('story_id')
+                ->distinct()
                 ->pluck('story_id');
 
             foreach ($storyIds as $storyId) {
                 self::updateStoryAggregate($storyId);
             }
 
-            return $verified;
+            return $updated;
         } catch (\Exception $e) {
             Log::error('Failed to bulk verify ratings', [
+                'rating_ids' => $ratingIds,
+                'error' => $e->getMessage(),
+            ]);
+
+            return 0;
+        }
+    }
+
+    public static function bulkDeleteRatings(array $ratingIds): int
+    {
+        try {
+            // Get story IDs before deletion
+            $storyIds = self::whereIn('id', $ratingIds)
+                ->distinct()
+                ->pluck('story_id');
+
+            $deleted = self::whereIn('id', $ratingIds)->delete();
+
+            // Update aggregates for affected stories
+            foreach ($storyIds as $storyId) {
+                self::updateStoryAggregate($storyId);
+            }
+
+            return $deleted;
+        } catch (\Exception $e) {
+            Log::error('Failed to bulk delete ratings', [
                 'rating_ids' => $ratingIds,
                 'error' => $e->getMessage(),
             ]);

@@ -390,27 +390,58 @@ class StoryPublishingHistory extends Model
     */
 
     /**
-     * Get comprehensive publishing analytics data
+     * Get comprehensive publishing analytics for admin dashboard
      * 
-     * @param int $days Number of days to analyze (default: 30)
-     * @return array Complete analytics data with all required sections
+     * @param int $days Number of days to analyze
+     * @return array Analytics data
      */
-    public static function getPublishingAnalytics(int $days = 30): array
+    public static function getPublishingAnalytics(int $days): array
     {
-        return Cache::remember('publishing_analytics_' . $days, self::CACHE_TTL_ANALYTICS, function () use ($days): array {
-            $startDate = Carbon::now()->subDays($days);
+        $startDate = now()->subDays($days);
 
-            return [
-                'activity_summary' => self::getActivitySummary($startDate),
-                'action_breakdown' => self::getActionBreakdown($startDate),
-                'daily_activity' => self::getDailyActivity($days),
-                'user_activity' => self::getUserActivity($startDate),
-                'story_activity' => self::getStoryActivity($startDate),
-                'impact_analysis' => self::getImpactAnalysis($startDate),
-                'performance_metrics' => self::getPerformanceMetrics($startDate),
-                'trend_analysis' => self::getTrendAnalysis($startDate, $days),
-            ];
-        });
+        // Activity Summary
+        $totalActions = self::where('created_at', '>', $startDate)->count();
+        $activitySummary = [
+            'total_actions' => $totalActions,
+            'daily_average' => round($totalActions / max($days, 1), 2),
+            'active_days' => self::where('created_at', '>', $startDate)
+                ->selectRaw('COUNT(DISTINCT DATE(created_at)) as active_days')
+                ->value('active_days') ?? 0,
+        ];
+
+        // Action Breakdown
+        $actionBreakdown = self::where('created_at', '>', $startDate)
+            ->selectRaw('action, COUNT(*) as count')
+            ->groupBy('action')
+            ->pluck('count', 'action')
+            ->toArray();
+
+        // User Activity
+        $userActivity = self::where('created_at', '>', $startDate)
+            ->join('users', 'story_publishing_history.user_id', '=', 'users.id')
+            ->selectRaw('users.id, users.name, COUNT(*) as action_count')
+            ->groupBy('users.id', 'users.name')
+            ->orderByDesc('action_count')
+            ->limit(10)
+            ->get()
+            ->toArray();
+
+        // Impact Analysis
+        $impactAnalysis = [
+            'stories_affected' => self::where('created_at', '>', $startDate)
+                ->distinct('story_id')
+                ->count('story_id'),
+            'publishing_rate' => self::where('created_at', '>', $startDate)
+                ->whereIn('action', ['published', 'republished'])
+                ->count(),
+        ];
+
+        return [
+            'activity_summary' => $activitySummary,
+            'action_breakdown' => $actionBreakdown,
+            'user_activity' => $userActivity,
+            'impact_analysis' => $impactAnalysis,
+        ];
     }
 
     /**

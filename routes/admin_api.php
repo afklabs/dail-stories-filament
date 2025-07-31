@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\PublishingController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryManagementController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,13 +24,15 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// ✅ Admin health check
+// ✅ Admin health check - FIXED: Proper authentication handling
 Route::get('/health', function () {
     return response()->json([
         'success' => true,
         'message' => 'Admin API is healthy',
         'timestamp' => now()->toISOString(),
-        'user' => auth()->user()?->name,
+        'user' => Auth::user()?->name, // ✅ FIXED: Use Auth::user() instead of auth()->user()
+        'authenticated' => Auth::check(),
+        'guard' => Auth::getDefaultDriver(),
     ]);
 })->name('health');
 
@@ -222,11 +225,6 @@ Route::prefix('members')->name('members.')->group(function (): void {
     Route::get('/retention-analysis', [AnalyticsController::class, 'getRetentionAnalysis'])
         ->name('retention-analysis');
 
-    // Member communication tools
-    Route::post('/bulk-notifications', [SettingsController::class, 'sendBulkNotifications'])
-        ->name('bulk-notifications')
-        ->middleware('throttle:3,1');
-
     // Member management actions
     Route::post('/{member}/suspend', [AnalyticsController::class, 'suspendMember'])
         ->name('suspend')
@@ -236,122 +234,6 @@ Route::prefix('members')->name('members.')->group(function (): void {
         ->name('activate')
         ->middleware('throttle:10,1');
 });
-
-/*
-|--------------------------------------------------------------------------
-| Settings & Configuration
-|--------------------------------------------------------------------------
-*/
-
-Route::prefix('settings')->name('settings.')->group(function (): void {
-    // Application settings
-    Route::get('/story-defaults', [SettingsController::class, 'getStoryDefaults'])
-        ->name('story-defaults');
-
-    Route::put('/story-defaults', [SettingsController::class, 'updateStoryDefaults'])
-        ->name('update-story-defaults');
-
-    // System configuration
-    Route::get('/system', [SettingsController::class, 'getSystemSettings'])
-        ->name('system');
-
-    Route::put('/system', [SettingsController::class, 'updateSystemSettings'])
-        ->name('update-system');
-
-    // Cache and performance management
-    Route::post('/clear-cache', [SettingsController::class, 'clearCache'])
-        ->name('clear-cache')
-        ->middleware('throttle:5,1');
-
-    Route::post('/refresh-analytics', [SettingsController::class, 'refreshAnalytics'])
-        ->name('refresh-analytics')
-        ->middleware('throttle:3,1');
-
-    // Performance optimization
-    Route::get('/performance-metrics', [SettingsController::class, 'getPerformanceMetrics'])
-        ->name('performance-metrics');
-
-    Route::post('/optimize-database', [SettingsController::class, 'optimizeDatabase'])
-        ->name('optimize-database')
-        ->middleware('throttle:1,5'); // 1 request per 5 minutes
-
-    // Security and monitoring
-    Route::get('/security-audit', [SettingsController::class, 'getSecurityAudit'])
-        ->name('security-audit');
-
-    Route::post('/security-scan', [SettingsController::class, 'runSecurityScan'])
-        ->name('security-scan')
-        ->middleware('throttle:2,1');
-});
-
-/*
-|--------------------------------------------------------------------------
-| System Monitoring & Health
-|--------------------------------------------------------------------------
-*/
-
-Route::prefix('system')->name('system.')->group(function (): void {
-    // System health monitoring
-    Route::get('/health-detailed', [SettingsController::class, 'getSystemHealth'])
-        ->name('health-detailed');
-
-    Route::get('/performance', [SettingsController::class, 'getSystemPerformance'])
-        ->name('performance');
-
-    // Error tracking and logging
-    Route::get('/error-logs', [SettingsController::class, 'getErrorLogs'])
-        ->name('error-logs');
-
-    Route::post('/clear-logs', [SettingsController::class, 'clearLogs'])
-        ->name('clear-logs')
-        ->middleware('throttle:2,1');
-
-    // Maintenance and utilities
-    Route::post('/maintenance/enable', [SettingsController::class, 'enableMaintenance'])
-        ->name('maintenance.enable')
-        ->middleware('throttle:1,5');
-
-    Route::post('/maintenance/disable', [SettingsController::class, 'disableMaintenance'])
-        ->name('maintenance.disable')
-        ->middleware('throttle:1,5');
-
-    // Backup and restore
-    Route::post('/backup/create', [SettingsController::class, 'createBackup'])
-        ->name('backup.create')
-        ->middleware('throttle:1,10'); // 1 request per 10 minutes
-
-    Route::get('/backup/list', [SettingsController::class, 'listBackups'])
-        ->name('backup.list');
-});
-
-/*
-|--------------------------------------------------------------------------
-| Settings
-|--------------------------------------------------------------------------
-*/
-
-Route::prefix('settings')->name('settings.')->group(function (): void {
-    // Story settings
-    Route::get('/story-defaults', [SettingsController::class, 'getStoryDefaults'])
-        ->name('story-defaults');
-        
-    Route::put('/story-defaults', [SettingsController::class, 'updateStoryDefaults'])
-        ->name('update-story-defaults');
-
-    // All settings
-    Route::get('/all', [SettingsController::class, 'getAllSettings'])
-        ->name('all');
-
-    // Cache management
-    Route::post('/clear-cache', [SettingsController::class, 'clearCache'])
-        ->name('clear-cache')
-        ->middleware('throttle:5,1');
-
-    // Performance metrics
-    Route::get('/performance-metrics', [SettingsController::class, 'getPerformanceMetrics'])
-        ->name('performance-metrics');
-});
-
 
 /*
 |--------------------------------------------------------------------------
@@ -370,8 +252,4 @@ Route::prefix('dev')->name('dev.')
                 'data' => \Illuminate\Support\Facades\Route::getRoutes()->get(),
             ]);
         })->name('routes');
-
-        // System information
-        Route::get('/info', [SettingsController::class, 'getSystemInfo'])
-            ->name('info');
     });

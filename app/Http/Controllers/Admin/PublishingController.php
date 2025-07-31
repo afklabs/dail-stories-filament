@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Gate;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -200,7 +202,7 @@ class PublishingController extends BaseAdminController
             $days = $request->integer('days', 30);
             $data = $this->prepareExportData($days);
 
-            $filename = "publishing_history_{$days}days_".now()->format('Y-m-d_H-i-s');
+            $filename = "publishing_history_{$days}days_" . now()->format('Y-m-d_H-i-s');
             $filePath = $this->generateExportFile($data, $format, $filename);
 
             return $this->successResponse([
@@ -283,7 +285,7 @@ class PublishingController extends BaseAdminController
             ->orderBy('week')
             ->get()
             ->map(function ($item) {
-                $weekStart = Carbon::parse($item->week.'1')->startOfWeek();
+                $weekStart = Carbon::parse($item->week . '1')->startOfWeek();
 
                 return [
                     'week' => $item->week,
@@ -499,13 +501,13 @@ class PublishingController extends BaseAdminController
     private function generateExcelFile(array $data, string $filename): string
     {
         // Simplified Excel generation - in production, use PhpSpreadsheet
-        return $this->generateCSVFile($data, $filename.'_excel');
+        return $this->generateCSVFile($data, $filename . '_excel');
     }
 
     private function generatePDFFile(array $data, string $filename): string
     {
         // Simplified PDF generation - in production, use dompdf or similar
-        return $this->generateCSVFile($data, $filename.'_pdf');
+        return $this->generateCSVFile($data, $filename . '_pdf');
     }
 
     // Simplified calculation methods - implement with real logic

@@ -125,7 +125,6 @@ class StoryController extends Controller
                     'views' => $story->views,
                     'reading_time_minutes' => $story->reading_time_minutes,
                     'rating' => $this->transformRating($story->ratingAggregate),
-
                     'active_from' => $story->active_from?->toISOString(),
                     'active_until' => $story->active_until?->toISOString(),
                     'created_at' => $story->created_at->toISOString(),
@@ -219,7 +218,6 @@ class StoryController extends Controller
                 'views' => $story->views,
                 'reading_time_minutes' => $story->reading_time_minutes,
                 'rating' => $this->transformRating($story->ratingAggregate),
-
                 'active_from' => $story->active_from?->toISOString(),
                 'active_until' => $story->active_until?->toISOString(),
                 'created_at' => $story->created_at->toISOString(),
@@ -304,7 +302,6 @@ class StoryController extends Controller
                     'views' => $story->views,
                     'reading_time_minutes' => $story->reading_time_minutes,
                     'rating' => $this->transformRating($story->ratingAggregate),
-
                     'created_at' => $story->created_at->toISOString(),
                 ];
             });
@@ -405,7 +402,6 @@ class StoryController extends Controller
                     'recent_views' => $story->recent_views ?? 0,
                     'reading_time_minutes' => $story->reading_time_minutes,
                     'rating' => $this->transformRating($story->ratingAggregate),
-
                     'created_at' => $story->created_at->toISOString(),
                 ];
             });
@@ -1080,10 +1076,48 @@ class StoryController extends Controller
         };
     }
 
+    /**
+     * FIXED: Complete isMobile method with proper mobile device detection
+     */
     private function isMobile(?string $userAgent): bool
     {
         if (!$userAgent) return false;
-        return (bool) preg_match('/(Mobile|Android|iPhone|iPad|iPod|BlackBerry|Windows Phone)/i', $userAgent);
+
+        // Comprehensive mobile detection patterns
+        $mobilePatterns = [
+            // Primary mobile indicators
+            '/Mobile|Android|iPhone|iPad|iPod|BlackBerry|Windows Phone/i',
+            // Tablet specific
+            '/Tablet|PlayBook|Kindle|Silk/i',
+            // Mobile browsers
+            '/Opera Mini|Opera Mobi|Mobile.*Firefox|Mobile.*Safari/i',
+            // Specific mobile devices
+            '/Nokia|Samsung|LG|SonyEricsson|Motorola/i',
+            // Mobile OS patterns
+            '/webOS|bada|Tizen|Symbian/i',
+        ];
+
+        foreach ($mobilePatterns as $pattern) {
+            if (preg_match($pattern, $userAgent)) {
+                return true;
+            }
+        }
+
+        // Additional check for screen size indicators (if provided in headers)
+        $screenResolution = request()->header('X-Screen-Resolution');
+        if ($screenResolution) {
+            $dimensions = explode('x', $screenResolution);
+            if (count($dimensions) === 2) {
+                $width = (int) $dimensions[0];
+                $height = (int) $dimensions[1];
+                // Consider devices with width <= 768px as mobile
+                if ($width <= 768 || $height <= 768) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1159,10 +1193,6 @@ class StoryController extends Controller
         Cache::forget("story_analytics_{$storyId}_30days_detailed");
         Cache::forget("featured_stories_5");
     }
-
-
-
-
 
     /**
      * Safely get numeric value for rating

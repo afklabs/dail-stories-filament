@@ -43,19 +43,12 @@ class StoryPublishingHistory extends Model
      * Action type constants
      */
     public const ACTION_PUBLISHED = 'published';
-
     public const ACTION_UNPUBLISHED = 'unpublished';
-
     public const ACTION_REPUBLISHED = 'republished';
-
     public const ACTION_UPDATED = 'updated';
-
     public const ACTION_SCHEDULED = 'scheduled';
-
     public const ACTION_EXPIRED = 'expired';
-
     public const ACTION_RESCHEDULED = 'rescheduled';
-
     public const ACTION_EXTENDED = 'extended';
 
     /**
@@ -76,7 +69,6 @@ class StoryPublishingHistory extends Model
      * Cache constants
      */
     private const CACHE_TTL = 600; // 10 minutes
-
     private const CACHE_TTL_ANALYTICS = 1800; // 30 minutes
 
     /**
@@ -230,7 +222,7 @@ class StoryPublishingHistory extends Model
      */
     public function getChangesSummaryAttribute(): string
     {
-        if (! $this->changed_fields || empty($this->changed_fields)) {
+        if (!$this->changed_fields || empty($this->changed_fields)) {
             return 'No specific changes recorded';
         }
 
@@ -239,7 +231,7 @@ class StoryPublishingHistory extends Model
             return ucfirst(str_replace('_', ' ', $field));
         }, $fields);
 
-        return 'Changed: '.implode(', ', $formattedFields);
+        return 'Changed: ' . implode(', ', $formattedFields);
     }
 
     /**
@@ -268,7 +260,7 @@ class StoryPublishingHistory extends Model
         // Check active_from changes
         if ($this->previous_active_from !== $this->new_active_from) {
             if ($this->new_active_from) {
-                $changes[] = 'Start: '.$this->new_active_from->format('M j, Y H:i');
+                $changes[] = 'Start: ' . $this->new_active_from->format('M j, Y H:i');
             } else {
                 $changes[] = 'Start: Removed';
             }
@@ -277,7 +269,7 @@ class StoryPublishingHistory extends Model
         // Check active_until changes
         if ($this->previous_active_until !== $this->new_active_until) {
             if ($this->new_active_until) {
-                $changes[] = 'End: '.$this->new_active_until->format('M j, Y H:i');
+                $changes[] = 'End: ' . $this->new_active_until->format('M j, Y H:i');
             } else {
                 $changes[] = 'End: Removed';
             }
@@ -398,11 +390,14 @@ class StoryPublishingHistory extends Model
     */
 
     /**
-     * Get comprehensive publishing analytics
+     * Get comprehensive publishing analytics data
+     * 
+     * @param int $days Number of days to analyze (default: 30)
+     * @return array Complete analytics data with all required sections
      */
     public static function getPublishingAnalytics(int $days = 30): array
     {
-        return Cache::remember('publishing_analytics_'.$days, self::CACHE_TTL_ANALYTICS, function () use ($days): array {
+        return Cache::remember('publishing_analytics_' . $days, self::CACHE_TTL_ANALYTICS, function () use ($days): array {
             $startDate = Carbon::now()->subDays($days);
 
             return [
@@ -412,6 +407,8 @@ class StoryPublishingHistory extends Model
                 'user_activity' => self::getUserActivity($startDate),
                 'story_activity' => self::getStoryActivity($startDate),
                 'impact_analysis' => self::getImpactAnalysis($startDate),
+                'performance_metrics' => self::getPerformanceMetrics($startDate),
+                'trend_analysis' => self::getTrendAnalysis($startDate, $days),
             ];
         });
     }
@@ -428,12 +425,16 @@ class StoryPublishingHistory extends Model
         $scheduledToday = self::whereDate('created_at', Carbon::today())
             ->where('action', self::ACTION_SCHEDULED)->count();
 
+        $daysDiff = max(1, $startDate->diffInDays(Carbon::now()));
+
         return [
             'total_actions' => $totalActions,
             'today_actions' => $todayActions,
             'published_today' => $publishedToday,
             'scheduled_today' => $scheduledToday,
-            'average_daily' => round($totalActions / max(1, $startDate->diffInDays(Carbon::now())), 1),
+            'average_daily' => round($totalActions / $daysDiff, 2),
+            'most_active_day' => self::getMostActiveDay($startDate),
+            'peak_activity_hour' => self::getPeakActivityHour($startDate),
         ];
     }
 
@@ -454,20 +455,23 @@ class StoryPublishingHistory extends Model
      */
     private static function getDailyActivity(int $days): array
     {
-        $activity = [];
+        $activities = [];
+        $startDate = Carbon::now()->subDays($days);
 
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i);
-            $count = self::whereDate('created_at', $date)->count();
-
-            $activity[] = [
-                'date' => $date->format('Y-m-d'),
-                'formatted_date' => $date->format('M j'),
-                'count' => $count,
+        for ($i = 0; $i < $days; $i++) {
+            $currentDate = $startDate->copy()->addDays($i);
+            $activities[] = [
+                'date' => $currentDate->format('Y-m-d'),
+                'formatted_date' => $currentDate->format('M j'),
+                'count' => self::whereDate('created_at', $currentDate)->count(),
+                'published' => self::whereDate('created_at', $currentDate)
+                    ->where('action', self::ACTION_PUBLISHED)->count(),
+                'scheduled' => self::whereDate('created_at', $currentDate)
+                    ->where('action', self::ACTION_SCHEDULED)->count(),
             ];
         }
 
-        return $activity;
+        return $activities;
     }
 
     /**
@@ -475,20 +479,20 @@ class StoryPublishingHistory extends Model
      */
     private static function getUserActivity(Carbon $startDate): array
     {
-        return self::with('user')
-            ->where('created_at', '>=', $startDate)
-            ->selectRaw('user_id, COUNT(*) as actions_count')
-            ->groupBy('user_id')
-            ->orderByDesc('actions_count')
+        return self::where('created_at', '>=', $startDate)
+            ->join('users', 'story_publishing_history.user_id', '=', 'users.id')
+            ->selectRaw('
+                users.id,
+                users.name,
+                COUNT(*) as total_actions,
+                COUNT(CASE WHEN action = ? THEN 1 END) as published_count,
+                COUNT(CASE WHEN action = ? THEN 1 END) as scheduled_count,
+                MAX(story_publishing_history.created_at) as last_action_at
+            ', [self::ACTION_PUBLISHED, self::ACTION_SCHEDULED])
+            ->groupBy('users.id', 'users.name')
+            ->orderByDesc('total_actions')
             ->limit(10)
             ->get()
-            ->map(function ($history) {
-                return [
-                    'user_id' => $history->user_id,
-                    'user_name' => $history->user?->name ?? 'Unknown User',
-                    'actions_count' => $history->actions_count,
-                ];
-            })
             ->toArray();
     }
 
@@ -497,19 +501,23 @@ class StoryPublishingHistory extends Model
      */
     private static function getStoryActivity(Carbon $startDate): array
     {
-        return self::with('story')
-            ->where('created_at', '>=', $startDate)
-            ->selectRaw('story_id, COUNT(*) as actions_count')
-            ->groupBy('story_id')
-            ->orderByDesc('actions_count')
-            ->limit(10)
+        return self::where('created_at', '>=', $startDate)
+            ->join('stories', 'story_publishing_history.story_id', '=', 'stories.id')
+            ->selectRaw('
+                stories.id,
+                stories.title,
+                COUNT(*) as action_count,
+                MAX(story_publishing_history.created_at) as last_updated,
+                GROUP_CONCAT(DISTINCT action) as actions_taken
+            ')
+            ->groupBy('stories.id', 'stories.title')
+            ->having('action_count', '>', 1)
+            ->orderByDesc('action_count')
+            ->limit(15)
             ->get()
-            ->map(function ($history) {
-                return [
-                    'story_id' => $history->story_id,
-                    'story_title' => Str::limit($history->story?->title ?? 'Unknown Story', 50),
-                    'actions_count' => $history->actions_count,
-                ];
+            ->map(function ($item) {
+                $item->actions_taken = explode(',', $item->actions_taken);
+                return $item;
             })
             ->toArray();
     }
@@ -519,24 +527,180 @@ class StoryPublishingHistory extends Model
      */
     private static function getImpactAnalysis(Carbon $startDate): array
     {
-        $highImpact = self::where('created_at', '>=', $startDate)
-            ->whereIn('action', [self::ACTION_PUBLISHED, self::ACTION_UNPUBLISHED, self::ACTION_EXPIRED])
-            ->count();
-
-        $mediumImpact = self::where('created_at', '>=', $startDate)
-            ->whereIn('action', [self::ACTION_SCHEDULED, self::ACTION_RESCHEDULED])
-            ->count();
-
-        $lowImpact = self::where('created_at', '>=', $startDate)
-            ->whereIn('action', [self::ACTION_UPDATED, self::ACTION_EXTENDED])
-            ->count();
+        $highImpactActions = self::where('created_at', '>=', $startDate)
+            ->join('stories', 'story_publishing_history.story_id', '=', 'stories.id')
+            ->where('stories.views', '>', 100) // High-view stories
+            ->selectRaw('action, COUNT(*) as count, AVG(stories.views) as avg_views')
+            ->groupBy('action')
+            ->get()
+            ->toArray();
 
         return [
-            'high_impact' => $highImpact,
-            'medium_impact' => $mediumImpact,
-            'low_impact' => $lowImpact,
-            'total_impact_actions' => $highImpact + $mediumImpact + $lowImpact,
+            'high_impact_actions' => $highImpactActions,
+            'republish_success_rate' => self::calculateRepublishSuccessRate($startDate),
+            'schedule_accuracy' => self::calculateScheduleAccuracy($startDate),
+            'performance_correlation' => self::getPerformanceCorrelation($startDate),
         ];
+    }
+
+    /**
+     * Get performance metrics
+     */
+    private static function getPerformanceMetrics(Carbon $startDate): array
+    {
+        $totalActions = self::where('created_at', '>=', $startDate)->count();
+        $publishedStories = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_PUBLISHED)->count();
+
+        return [
+            'total_actions' => $totalActions,
+            'published_stories' => $publishedStories,
+            'publish_rate' => $totalActions > 0 ? round(($publishedStories / $totalActions) * 100, 2) : 0,
+            'avg_actions_per_story' => $publishedStories > 0 ? round($totalActions / $publishedStories, 2) : 0,
+            'most_productive_hour' => self::getMostProductiveHour($startDate),
+            'efficiency_score' => self::calculateEfficiencyScore($startDate),
+        ];
+    }
+
+    /**
+     * Get trend analysis
+     */
+    private static function getTrendAnalysis(Carbon $startDate, int $days): array
+    {
+        $currentPeriod = self::where('created_at', '>=', $startDate)->count();
+        $previousPeriod = self::where('created_at', '>=', $startDate->copy()->subDays($days))
+            ->where('created_at', '<', $startDate)
+            ->count();
+
+        $growthRate = $previousPeriod > 0
+            ? round((($currentPeriod - $previousPeriod) / $previousPeriod) * 100, 2)
+            : 0;
+
+        return [
+            'current_period_actions' => $currentPeriod,
+            'previous_period_actions' => $previousPeriod,
+            'growth_rate' => $growthRate,
+            'trend_direction' => $growthRate > 0 ? 'up' : ($growthRate < 0 ? 'down' : 'stable'),
+            'weekly_pattern' => self::getWeeklyPattern($startDate),
+            'seasonal_trends' => self::getSeasonalTrends($startDate),
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HELPER METHODS FOR ANALYTICS
+    |--------------------------------------------------------------------------
+    */
+
+    private static function getMostActiveDay(Carbon $startDate): ?string
+    {
+        $result = self::where('created_at', '>=', $startDate)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupBy('date')
+            ->orderByDesc('count')
+            ->first();
+
+        return $result ? Carbon::parse($result->date)->format('M j, Y') : null;
+    }
+
+    private static function getPeakActivityHour(Carbon $startDate): ?int
+    {
+        $result = self::where('created_at', '>=', $startDate)
+            ->selectRaw('HOUR(created_at) as hour, COUNT(*) as count')
+            ->groupBy('hour')
+            ->orderByDesc('count')
+            ->first();
+
+        return $result ? $result->hour : null;
+    }
+
+    private static function calculateRepublishSuccessRate(Carbon $startDate): float
+    {
+        $republishActions = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_REPUBLISHED)->count();
+
+        if ($republishActions === 0) return 0.0;
+
+        $successfulRepublishes = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_REPUBLISHED)
+            ->join('stories', 'story_publishing_history.story_id', '=', 'stories.id')
+            ->where('stories.views', '>', 50)
+            ->count();
+
+        return round(($successfulRepublishes / $republishActions) * 100, 2);
+    }
+
+    private static function calculateScheduleAccuracy(Carbon $startDate): float
+    {
+        $scheduledActions = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_SCHEDULED)
+            ->whereNotNull('new_active_from')
+            ->count();
+
+        if ($scheduledActions === 0) return 100.0;
+
+        $accurateSchedules = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_SCHEDULED)
+            ->whereNotNull('new_active_from')
+            ->whereRaw('ABS(TIMESTAMPDIFF(MINUTE, new_active_from, created_at)) <= 30')
+            ->count();
+
+        return round(($accurateSchedules / $scheduledActions) * 100, 2);
+    }
+
+    private static function getPerformanceCorrelation(Carbon $startDate): array
+    {
+        return [
+            'publish_to_views_correlation' => self::calculatePublishViewsCorrelation($startDate),
+            'schedule_efficiency' => self::calculateScheduleAccuracy($startDate),
+            'republish_impact' => self::calculateRepublishSuccessRate($startDate),
+        ];
+    }
+
+    private static function getMostProductiveHour(Carbon $startDate): ?int
+    {
+        return self::getPeakActivityHour($startDate);
+    }
+
+    private static function calculateEfficiencyScore(Carbon $startDate): float
+    {
+        $totalActions = self::where('created_at', '>=', $startDate)->count();
+        $successfulActions = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_PUBLISHED)
+            ->count();
+
+        return $totalActions > 0 ? round(($successfulActions / $totalActions) * 100, 2) : 0.0;
+    }
+
+    private static function getWeeklyPattern(Carbon $startDate): array
+    {
+        return self::where('created_at', '>=', $startDate)
+            ->selectRaw('DAYOFWEEK(created_at) as day_of_week, COUNT(*) as count')
+            ->groupBy('day_of_week')
+            ->orderBy('day_of_week')
+            ->pluck('count', 'day_of_week')
+            ->toArray();
+    }
+
+    private static function getSeasonalTrends(Carbon $startDate): array
+    {
+        return self::where('created_at', '>=', $startDate)
+            ->selectRaw('MONTH(created_at) as month, COUNT(*) as count')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->pluck('count', 'month')
+            ->toArray();
+    }
+
+    private static function calculatePublishViewsCorrelation(Carbon $startDate): float
+    {
+        $data = self::where('created_at', '>=', $startDate)
+            ->where('action', self::ACTION_PUBLISHED)
+            ->join('stories', 'story_publishing_history.story_id', '=', 'stories.id')
+            ->selectRaw('COUNT(*) as publish_count, AVG(stories.views) as avg_views')
+            ->first();
+
+        return $data ? round($data->avg_views / max($data->publish_count, 1), 2) : 0.0;
     }
 
     /*
@@ -628,7 +792,7 @@ class StoryPublishingHistory extends Model
         return [
             'story_id' => 'required|exists:stories,id',
             'user_id' => 'required|exists:users,id',
-            'action' => 'required|in:'.implode(',', self::VALID_ACTIONS),
+            'action' => 'required|in:' . implode(',', self::VALID_ACTIONS),
             'previous_active_status' => 'nullable|boolean',
             'new_active_status' => 'nullable|boolean',
             'previous_active_from' => 'nullable|date',
@@ -655,6 +819,6 @@ class StoryPublishingHistory extends Model
      */
     public function getFilamentName(): string
     {
-        return $this->formatted_action.' - '.($this->story?->title ?? 'Unknown Story');
+        return $this->formatted_action . ' - ' . ($this->story?->title ?? 'Unknown Story');
     }
 }

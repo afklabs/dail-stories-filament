@@ -260,7 +260,7 @@ class Story extends Model
 
         return Storage::url($this->image);
     }
-    
+
     /**
      * Get sanitized excerpt with auto-generation fallback
      */
@@ -275,13 +275,59 @@ class Story extends Model
     }
 
     /**
-     * Set excerpt with sanitization
+     * Set excerpt with sanitization and validation
+     * 
+     * This mutator handles:
+     * - HTML tag stripping
+     * - Length validation and limiting
+     * - Null value handling
+     * - Automatic excerpt generation fallback
      */
     public function setExcerptAttribute(?string $value): void
     {
-        $this->attributes['excerpt'] = $value ? Str::limit(strip_tags($value), self::MAX_EXCERPT_LENGTH) : null;
-    }
+        if (empty($value)) {
+            // If no excerpt provided, don't set anything - let the accessor handle auto-generation
+            $this->attributes['excerpt'] = null;
+            return;
+        }
 
+        // Sanitize the input by stripping HTML tags
+        $cleanValue = strip_tags($value);
+
+        // Remove extra whitespace and normalize
+        $cleanValue = preg_replace('/\s+/', ' ', $cleanValue);
+        $cleanValue = trim($cleanValue);
+
+        // Validate minimum length
+        if (strlen($cleanValue) < self::MIN_EXCERPT_LENGTH) {
+            // If too short, let auto-generation handle it
+            $this->attributes['excerpt'] = null;
+            return;
+        }
+
+        // Limit to maximum length with proper sentence ending
+        if (strlen($cleanValue) > self::MAX_EXCERPT_LENGTH) {
+            // Try to find a good breaking point (sentence end)
+            $limitedValue = Str::limit($cleanValue, self::MAX_EXCERPT_LENGTH, '');
+
+            // Find the last sentence-ending punctuation
+            $lastPeriod = strrpos($limitedValue, '.');
+            $lastQuestion = strrpos($limitedValue, '?');
+            $lastExclamation = strrpos($limitedValue, '!');
+
+            $lastSentenceEnd = max($lastPeriod, $lastQuestion, $lastExclamation);
+
+            if ($lastSentenceEnd !== false && $lastSentenceEnd > self::MIN_EXCERPT_LENGTH) {
+                // Break at sentence end
+                $cleanValue = substr($limitedValue, 0, $lastSentenceEnd + 1);
+            } else {
+                // No good break point found, add ellipsis
+                $cleanValue = $limitedValue . '...';
+            }
+        }
+
+        $this->attributes['excerpt'] = $cleanValue;
+    }
     /**
      * Get story status based on active state and dates
      */

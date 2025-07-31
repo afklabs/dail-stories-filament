@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller; // ✅ ADDED: Missing import
+use App\Http\Controllers\Controller;
 use App\Models\Member;
 use App\Models\MemberStoryInteraction;
 use App\Models\MemberStoryRating;
 use App\Models\Story;
-use App\Models\StoryCategory;
+use App\Models\Category;
 use App\Models\StoryView;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -155,7 +155,7 @@ class AnalyticsController extends BaseAdminController
     {
         $dateFrom = Carbon::now()->subDays($days);
 
-        return StoryCategory::withCount(['stories' => function ($query) use ($dateFrom) {
+        return Category::withCount(['stories' => function ($query) use ($dateFrom) {
             $query->whereHas('views', function ($viewQuery) use ($dateFrom) {
                 $viewQuery->where('created_at', '>=', $dateFrom);
             });

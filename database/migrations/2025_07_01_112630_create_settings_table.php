@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('type')->default('text'); // text, number, boolean, json, array
             $table->text('description')->nullable();
             $table->timestamps();
-            
+
             $table->index(['group', 'key']);
         });
 
@@ -47,7 +47,7 @@ return new class extends Migration
                 'type' => 'integer', // This tells the model to cast to integer
                 'description' => 'Number of hours to add to "Active From" date for "Active Until"',
             ],
-                        
+
             // Cache Settings
             [
                 'key' => 'cache.default_duration',
@@ -77,7 +77,7 @@ return new class extends Migration
                 'type' => 'boolean',
                 'description' => 'Enable or disable caching',
             ],
-            
+
             // Performance Settings
             [
                 'key' => 'performance.query_cache',
@@ -93,7 +93,7 @@ return new class extends Migration
                 'type' => 'boolean',
                 'description' => 'Enable image optimization',
             ],
-            
+
             // Security Settings
             [
                 'key' => 'security.rate_limiting',
@@ -116,7 +116,7 @@ return new class extends Migration
                 'type' => 'boolean',
                 'description' => 'Require two-factor authentication',
             ],
-            
+
             // Notification Settings
             [
                 'key' => 'notifications.new_member',
@@ -133,9 +133,5 @@ return new class extends Migration
                 'description' => 'Send notification when story needs approval',
             ],
         ];
-
-        foreach ($settings as $setting) {
-            \DB::table('settings')->insert($setting);
-        }
     }
 };

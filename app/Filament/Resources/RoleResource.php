@@ -128,7 +128,7 @@ class RoleResource extends Resource
                             }),
                     ])
                     ->columns(2)
-                    ->hidden(fn (string $context): bool => $context === 'create'),
+                    ->hidden(fn(string $context): bool => $context === 'create'),
             ]);
     }
 
@@ -140,31 +140,36 @@ class RoleResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight(FontWeight::Bold)
-                    ->copyable(),
+                    ->copyable()
+                    ->copyMessage('Role name copied')
+                    ->copyMessageDuration(1500),
 
                 Tables\Columns\TextColumn::make('guard_name')
                     ->badge()
-                    ->color('primary'),
+                    ->color('primary')
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('permissions_count')
                     ->counts('permissions')
                     ->label('Permissions')
                     ->badge()
-                    ->color('success'),
+                    ->color('success')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('users_count')
                     ->counts('users')
                     ->label('Users')
                     ->badge()
-                    ->color('warning'),
+                    ->color('warning')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('description')
                     ->limit(50)
                     ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
                         $state = $column->getState();
-
                         return strlen($state) > 50 ? $state : null;
                     })
+                    ->placeholder('No description')
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('created_at')
@@ -186,13 +191,11 @@ class RoleResource extends Resource
 
                 Tables\Filters\Filter::make('has_users')
                     ->label('Has Users')
-                    ->query(fn (Builder $query): Builder => $query->has('users'))
-                    ->toggle(),
+                    ->query(fn(Builder $query): Builder => $query->has('users')),
 
-                Tables\Filters\Filter::make('system_roles')
-                    ->label('System Roles')
-                    ->query(fn (Builder $query): Builder => $query->whereIn('name', ['super_admin', 'admin', 'moderator']))
-                    ->toggle(),
+                Tables\Filters\Filter::make('no_users')
+                    ->label('No Users')
+                    ->query(fn(Builder $query): Builder => $query->doesntHave('users')),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -200,25 +203,37 @@ class RoleResource extends Resource
                 Tables\Actions\DeleteAction::make()
                     ->requiresConfirmation()
                     ->modalHeading('Delete Role')
-                    ->modalDescription('Are you sure you want to delete this role? Users with this role will lose their permissions.')
+                    ->modalDescription(function ($record) {
+                        $usersCount = $record->users()->count();
+                        if ($usersCount > 0) {
+                            return "This role is assigned to {$usersCount} user(s). Deleting it will remove their permissions. Are you sure?";
+                        }
+                        return 'Are you sure you want to delete this role?';
+                    })
                     ->modalSubmitActionLabel('Yes, delete role'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->requiresConfirmation(),
+                        ->requiresConfirmation()
+                        ->modalHeading('Delete Selected Roles')
+                        ->modalDescription('Are you sure you want to delete the selected roles? This will remove permissions from assigned users.')
+                        ->modalSubmitActionLabel('Yes, delete roles'),
                 ]),
             ])
-            ->defaultSort('name');
+            ->emptyStateHeading('No roles found')
+            ->emptyStateDescription('Create your first role to manage user permissions.')
+            ->emptyStateIcon('heroicon-o-shield-check')
+            ->defaultSort('name', 'asc');
     }
 
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist
             ->schema([
-                Infolists\Components\Section::make('Role Details')
+                Infolists\Components\Section::make('Role Information')
                     ->schema([
-                        Infolists\Components\Grid::make(2)
+                        Infolists\Components\Grid::make(3)
                             ->schema([
                                 Infolists\Components\TextEntry::make('name')
                                     ->weight(FontWeight::Bold)
@@ -228,13 +243,15 @@ class RoleResource extends Resource
                                     ->badge()
                                     ->color('primary'),
 
-                                Infolists\Components\TextEntry::make('users_count')
-                                    ->label('Users with this role')
-                                    ->formatStateUsing(fn ($record) => $record->users()->count()),
-
-                                Infolists\Components\TextEntry::make('permissions_count')
-                                    ->label('Total permissions')
-                                    ->formatStateUsing(fn ($record) => $record->permissions()->count()),
+                                Infolists\Components\TextEntry::make('usage_summary')
+                                    ->label('Usage Summary')
+                                    ->formatStateUsing(function ($record) {
+                                        $usersCount = $record->users()->count();
+                                        $permissionsCount = $record->permissions()->count();
+                                        return "{$permissionsCount} permissions, {$usersCount} users";
+                                    })
+                                    ->badge()
+                                    ->color('info'),
                             ]),
 
                         Infolists\Components\TextEntry::make('description')
@@ -243,27 +260,43 @@ class RoleResource extends Resource
                     ]),
 
                 Infolists\Components\Section::make('Permissions')
+                    ->description('All permissions assigned to this role')
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('permissions')
                             ->schema([
                                 Infolists\Components\TextEntry::make('name')
                                     ->badge()
-                                    ->color('success'),
+                                    ->color(function ($state) {
+                                        // Color code by permission type
+                                        if (str_contains($state, 'create')) return 'success';
+                                        if (str_contains($state, 'edit') || str_contains($state, 'update')) return 'warning';
+                                        if (str_contains($state, 'delete')) return 'danger';
+                                        if (str_contains($state, 'view')) return 'info';
+                                        return 'gray';
+                                    }),
                             ])
                             ->columns(4)
                             ->columnSpanFull(),
-                    ]),
+                    ])
+                    ->collapsible(),
 
                 Infolists\Components\Section::make('Users with this Role')
+                    ->description('All users who have been assigned this role')
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('users')
                             ->schema([
-                                Infolists\Components\TextEntry::make('name')
-                                    ->weight(FontWeight::Bold),
-                                Infolists\Components\TextEntry::make('email')
-                                    ->color('gray'),
+                                Infolists\Components\Grid::make(3)
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('name')
+                                            ->weight(FontWeight::Bold),
+                                        Infolists\Components\TextEntry::make('email')
+                                            ->color('gray'),
+                                        Infolists\Components\TextEntry::make('created_at')
+                                            ->label('Joined')
+                                            ->since()
+                                            ->color('gray'),
+                                    ]),
                             ])
-                            ->columns(2)
                             ->columnSpanFull(),
                     ])
                     ->collapsible(),
@@ -302,5 +335,15 @@ class RoleResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return static::getModel()::count();
+    }
+
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with(['permissions']);
+    }
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'description'];
     }
 }

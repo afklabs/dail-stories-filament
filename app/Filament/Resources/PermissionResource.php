@@ -129,7 +129,7 @@ class PermissionResource extends Resource
                             }),
                     ])
                     ->columns(2)
-                    ->hidden(fn (string $context): bool => $context === 'create'),
+                    ->hidden(fn(string $context): bool => $context === 'create'),
             ]);
     }
 
@@ -141,19 +141,23 @@ class PermissionResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight(FontWeight::Bold)
-                    ->copyable(),
+                    ->copyable()
+                    ->copyMessage('Permission name copied')
+                    ->copyMessageDuration(1500),
 
                 Tables\Columns\TextColumn::make('category')
                     ->badge()
-                    ->color(fn (?string $state): string => match ($state) {
+                    ->color(fn(?string $state): string => match ($state) {
                         'stories' => 'success',
                         'members' => 'info',
                         'categories' => 'warning',
                         'users' => 'primary',
                         'system' => 'danger',
-                        default => 'gray',
+                        'settings' => 'gray',
+                        default => 'secondary',
                     })
-                    ->formatStateUsing(fn ($state) => $state ? ucfirst($state) : 'Other'),
+                    ->formatStateUsing(fn($state) => $state ? ucfirst($state) : 'Other')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('guard_name')
                     ->badge()
@@ -164,21 +168,23 @@ class PermissionResource extends Resource
                     ->counts('roles')
                     ->label('Roles')
                     ->badge()
-                    ->color('success'),
+                    ->color('success')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('users_count')
                     ->counts('users')
                     ->label('Users')
                     ->badge()
-                    ->color('warning'),
+                    ->color('warning')
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('description')
                     ->limit(50)
                     ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
                         $state = $column->getState();
-
                         return strlen($state) > 50 ? $state : null;
                     })
+                    ->placeholder('No description')
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('created_at')
@@ -192,12 +198,6 @@ class PermissionResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('guard_name')
-                    ->options([
-                        'web' => 'Web',
-                        'api' => 'API',
-                    ]),
-
                 Tables\Filters\SelectFilter::make('category')
                     ->options([
                         'stories' => 'Stories',
@@ -212,17 +212,19 @@ class PermissionResource extends Resource
                         'settings' => 'Settings',
                     ]),
 
-                Tables\Filters\Filter::make('has_roles')
-                    ->label('Assigned to Roles')
-                    ->query(fn (Builder $query): Builder => $query->has('roles'))
-                    ->toggle(),
+                Tables\Filters\SelectFilter::make('guard_name')
+                    ->options([
+                        'web' => 'Web',
+                        'api' => 'API',
+                    ]),
 
-                Tables\Filters\Filter::make('system_permissions')
-                    ->label('System Permissions')
-                    ->query(fn (Builder $query): Builder => $query->where('name', 'like', 'view_any_%')
-                        ->orWhere('name', 'like', 'delete_any_%')
-                        ->orWhere('name', 'like', 'force_%'))
-                    ->toggle(),
+                Tables\Filters\Filter::make('has_roles')
+                    ->label('Has Roles')
+                    ->query(fn(Builder $query): Builder => $query->has('roles')),
+
+                Tables\Filters\Filter::make('no_roles')
+                    ->label('No Roles')
+                    ->query(fn(Builder $query): Builder => $query->doesntHave('roles')),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -230,50 +232,66 @@ class PermissionResource extends Resource
                 Tables\Actions\DeleteAction::make()
                     ->requiresConfirmation()
                     ->modalHeading('Delete Permission')
-                    ->modalDescription('Are you sure you want to delete this permission? This action cannot be undone.')
+                    ->modalDescription(function ($record) {
+                        $rolesCount = $record->roles()->count();
+                        $usersCount = $record->users()->count();
+
+                        if ($rolesCount > 0 || $usersCount > 0) {
+                            return "This permission is assigned to {$rolesCount} role(s) and {$usersCount} user(s). Deleting it will remove their access. Are you sure?";
+                        }
+
+                        return 'Are you sure you want to delete this permission?';
+                    })
                     ->modalSubmitActionLabel('Yes, delete permission'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->requiresConfirmation(),
+                        ->requiresConfirmation()
+                        ->modalHeading('Delete Selected Permissions')
+                        ->modalDescription('Are you sure you want to delete the selected permissions? This will remove access from assigned roles and users.')
+                        ->modalSubmitActionLabel('Yes, delete permissions'),
                 ]),
             ])
-            ->defaultSort('name')
-            ->groups([
-                Tables\Grouping\Group::make('category')
-                    ->label('Category')
-                    ->collapsible(),
-                Tables\Grouping\Group::make('guard_name')
-                    ->label('Guard')
-                    ->collapsible(),
-            ]);
+            ->emptyStateHeading('No permissions found')
+            ->emptyStateDescription('Create your first permission to control user access.')
+            ->emptyStateIcon('heroicon-o-key')
+            ->defaultSort('name', 'asc');
     }
 
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist
             ->schema([
-                Infolists\Components\Section::make('Permission Details')
+                Infolists\Components\Section::make('Permission Information')
                     ->schema([
-                        Infolists\Components\Grid::make(2)
+                        Infolists\Components\Grid::make(3)
                             ->schema([
                                 Infolists\Components\TextEntry::make('name')
                                     ->weight(FontWeight::Bold)
                                     ->copyable(),
 
-                                Infolists\Components\TextEntry::make('guard_name')
-                                    ->badge()
-                                    ->color('primary'),
-
                                 Infolists\Components\TextEntry::make('category')
                                     ->badge()
-                                    ->color('success')
-                                    ->formatStateUsing(fn ($state) => $state ? ucfirst($state) : 'Other'),
+                                    ->color(fn(?string $state): string => match ($state) {
+                                        'stories' => 'success',
+                                        'members' => 'info',
+                                        'categories' => 'warning',
+                                        'users' => 'primary',
+                                        'system' => 'danger',
+                                        default => 'gray',
+                                    })
+                                    ->formatStateUsing(fn($state) => $state ? ucfirst($state) : 'Other'),
 
-                                Infolists\Components\TextEntry::make('roles_count')
-                                    ->label('Assigned to roles')
-                                    ->formatStateUsing(fn ($record) => $record->roles()->count()),
+                                Infolists\Components\TextEntry::make('usage_summary')
+                                    ->label('Usage Summary')
+                                    ->formatStateUsing(function ($record) {
+                                        $rolesCount = $record->roles()->count();
+                                        $usersCount = $record->users()->count();
+                                        return "{$rolesCount} roles, {$usersCount} direct users";
+                                    })
+                                    ->badge()
+                                    ->color('info'),
                             ]),
 
                         Infolists\Components\TextEntry::make('description')
@@ -282,27 +300,47 @@ class PermissionResource extends Resource
                     ]),
 
                 Infolists\Components\Section::make('Assigned Roles')
+                    ->description('Roles that have this permission')
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('roles')
                             ->schema([
-                                Infolists\Components\TextEntry::make('name')
-                                    ->badge()
-                                    ->color('success'),
+                                Infolists\Components\Grid::make(3)
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('name')
+                                            ->weight(FontWeight::Bold)
+                                            ->badge()
+                                            ->color('success'),
+                                        Infolists\Components\TextEntry::make('guard_name')
+                                            ->badge()
+                                            ->color('primary'),
+                                        Infolists\Components\TextEntry::make('users_count')
+                                            ->label('Users')
+                                            ->formatStateUsing(fn($record) => $record->users()->count())
+                                            ->badge()
+                                            ->color('warning'),
+                                    ]),
                             ])
-                            ->columns(4)
                             ->columnSpanFull(),
-                    ]),
+                    ])
+                    ->collapsible(),
 
                 Infolists\Components\Section::make('Users with this Permission')
+                    ->description('Users who have this permission directly assigned')
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('users')
                             ->schema([
-                                Infolists\Components\TextEntry::make('name')
-                                    ->weight(FontWeight::Bold),
-                                Infolists\Components\TextEntry::make('email')
-                                    ->color('gray'),
+                                Infolists\Components\Grid::make(3)
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('name')
+                                            ->weight(FontWeight::Bold),
+                                        Infolists\Components\TextEntry::make('email')
+                                            ->color('gray'),
+                                        Infolists\Components\TextEntry::make('created_at')
+                                            ->label('Joined')
+                                            ->since()
+                                            ->color('gray'),
+                                    ]),
                             ])
-                            ->columns(2)
                             ->columnSpanFull(),
                     ])
                     ->collapsible(),
@@ -341,5 +379,15 @@ class PermissionResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return static::getModel()::count();
+    }
+
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with(['roles']);
+    }
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'description'];
     }
 }

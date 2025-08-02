@@ -1,4 +1,4 @@
-<?php
+
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -16,6 +16,7 @@ return new class extends Migration
         Schema::create('stories', function (Blueprint $table) {
             $table->id();
             $table->string('title');
+            $table->string('author', 255)->nullable()->comment('Story author name (المؤلف)');
             $table->longText('content');
             $table->text('excerpt')->nullable();
             $table->foreignId('category_id')->constrained()->cascadeOnDelete();
@@ -31,6 +32,7 @@ return new class extends Migration
             $table->index(['active', 'active_from', 'active_until']);
             $table->index(['category_id', 'active']);
             $table->index('created_at');
+            $table->index('author', 'idx_stories_author');
         });
     }
 

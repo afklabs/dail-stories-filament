@@ -581,6 +581,9 @@ class MemberController extends Controller
                     'size' => $uploadResult['size'],
                     'mime_type' => $uploadResult['mime_type'],
                 ],
+                // ✅ NEW: Enhanced response with avatar information
+                'avatar_type' => 'custom',
+                'has_custom_avatar' => true,
                 'uploaded_at' => now()->toISOString(),
             ], 'Avatar uploaded successfully');
         } catch (ValidationException $e) {
@@ -592,6 +595,107 @@ class MemberController extends Controller
             ]);
 
             return $this->errorResponse('Failed to upload avatar. Please try again.', 500);
+        }
+    }
+
+    /**
+     * ✅ NEW: Remove custom avatar and revert to default
+     * 
+     * Endpoint: DELETE /v1/members/avatar
+     * Authentication: Required
+     * 
+     * @param Request $request
+     * @return JsonResponse Avatar removal confirmation
+     */
+    public function removeAvatar(Request $request): JsonResponse
+    {
+        try {
+            $member = $request->user();
+
+            if ($member->avatar) {
+                // Delete the custom avatar file
+                $this->fileUploadService->deleteFile($member->avatar);
+
+                // Clear avatar field (will trigger default avatar logic)
+                $member->update(['avatar' => null]);
+
+                Log::info('Avatar removed, reverted to default', [
+                    'member_id' => $member->id,
+                    'default_avatar_url' => $member->fresh()->avatar_url,
+                ]);
+
+                return $this->successResponse([
+                    'avatar_url' => $member->fresh()->avatar_url,
+                    'avatar_type' => 'default',
+                    'has_custom_avatar' => false,
+                    'initials' => $member->fresh()->initials,
+                    'removed_at' => now()->toISOString(),
+                ], 'Avatar removed successfully. Default avatar is now active.');
+            }
+
+            return $this->successResponse([
+                'avatar_url' => $member->avatar_url,
+                'avatar_type' => 'default',
+                'has_custom_avatar' => false,
+                'initials' => $member->initials,
+            ], 'No custom avatar to remove. Default avatar is active.');
+        } catch (\Exception $e) {
+            Log::error('Remove avatar error', [
+                'member_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse('Failed to remove avatar', 500);
+        }
+    }
+
+    /**
+     * ✅ NEW: Get avatar options and recommendations
+     * 
+     * Endpoint: GET /v1/members/avatar-options
+     * Authentication: Required
+     * 
+     * @param Request $request
+     * @return JsonResponse Available avatar options
+     */
+    public function getAvatarOptions(Request $request): JsonResponse
+    {
+        try {
+            $member = $request->user();
+
+            $options = [
+                'current' => [
+                    'url' => $member->avatar_url,
+                    'type' => $member->has_custom_avatar ? 'custom' : 'default',
+                    'has_custom' => $member->has_custom_avatar,
+                ],
+                'defaults' => [
+                    'male' => $member->gender === 'male' ? $member->getDefaultAvatarUrl() : (new Member(['gender' => 'male', 'name' => $member->name]))->getDefaultAvatarUrl(),
+                    'female' => $member->gender === 'female' ? $member->getDefaultAvatarUrl() : (new Member(['gender' => 'female', 'name' => $member->name]))->getDefaultAvatarUrl(),
+                    'neutral' => (new Member(['gender' => null, 'name' => $member->name]))->getDefaultAvatarUrl(),
+                ],
+                'generated' => [
+                    'initials' => $member->initials,
+                    'color' => $member->generateColorFromName(),
+                    'placeholder_url' => $member->generatePlaceholderAvatar(),
+                ],
+                'upload_requirements' => [
+                    'max_size_mb' => 2,
+                    'allowed_formats' => ['jpeg', 'png', 'jpg', 'webp'],
+                    'min_dimensions' => '200x200',
+                    'max_dimensions' => '2000x2000',
+                    'recommended_size' => '400x400',
+                ],
+            ];
+
+            return $this->successResponse($options, 'Avatar options retrieved successfully');
+        } catch (\Exception $e) {
+            Log::error('Get avatar options error', [
+                'member_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse('Failed to load avatar options', 500);
         }
     }
 
@@ -936,7 +1040,7 @@ class MemberController extends Controller
     // ===== PRIVATE HELPER METHODS =====
 
     /**
-     * Transform member model to consistent API format
+     * ✅ ENHANCED: Transform member model to consistent API format with default avatar
      * 
      * @param Member $member
      * @return array
@@ -948,7 +1052,13 @@ class MemberController extends Controller
             'name' => $member->name,
             'email' => $member->email,
             'phone' => $member->phone,
-            'avatar_url' => $member->avatar ? asset('storage/' . $member->avatar) : null,
+
+            // ✅ ENHANCED: Always return avatar_url (never null) and additional avatar info
+            'avatar_url' => $member->avatar_url, // This will now always return a URL
+            'has_custom_avatar' => $member->has_custom_avatar,
+            'avatar_type' => $member->has_custom_avatar ? 'custom' : 'default',
+            'initials' => $member->initials,
+
             'date_of_birth' => $member->date_of_birth?->toDateString(),
             'gender' => $member->gender,
             'status' => $member->status,

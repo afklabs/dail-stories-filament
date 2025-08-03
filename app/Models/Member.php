@@ -36,12 +36,101 @@ class Member extends Authenticatable implements FilamentUser
         'registration_ip',
         'user_agent',
     ];
-    // Add accessor for avatar_url
-    protected $appends = ['avatar_url'];
 
-    public function getAvatarUrlAttribute(): ?string
+    // ✅ ENHANCED: Add new accessor to existing appends array
+    protected $appends = ['avatar_url', 'has_custom_avatar', 'initials'];
+
+    // ✅ NEW: Default avatar configuration - ADD THIS SECTION
+    private const DEFAULT_AVATARS = [
+        'male' => 'default-avatars/male-avatar.png',
+        'female' => 'default-avatars/female-avatar.png',
+        'default' => 'default-avatars/default-avatar.png',
+    ];
+
+    // ✅ ENHANCED: Replace your existing getAvatarUrlAttribute with this enhanced version
+    public function getAvatarUrlAttribute(): string
     {
-        return $this->avatar ? Storage::url($this->avatar) : null;
+        // If user has custom avatar, return it
+        if ($this->avatar && Storage::disk('public')->exists($this->avatar)) {
+            return Storage::url($this->avatar);
+        }
+
+        // Return gender-based default or fallback to generic default
+        return $this->getDefaultAvatarUrl();
+    }
+
+    // ✅ NEW: Add these new methods to your existing model
+    public function getHasCustomAvatarAttribute(): bool
+    {
+        return $this->avatar && Storage::disk('public')->exists($this->avatar);
+    }
+
+    public function getInitialsAttribute(): string
+    {
+        $nameParts = explode(' ', trim($this->name ?? 'User'));
+
+        if (count($nameParts) >= 2) {
+            return strtoupper(substr($nameParts[0], 0, 1) . substr($nameParts[1], 0, 1));
+        }
+
+        return strtoupper(substr($nameParts[0], 0, 2));
+    }
+
+    public function getDefaultAvatarUrl(): string
+    {
+        $genderKey = strtolower($this->gender ?? 'default');
+
+        // Check if gender-specific default exists
+        if (isset(self::DEFAULT_AVATARS[$genderKey])) {
+            $defaultPath = self::DEFAULT_AVATARS[$genderKey];
+        } else {
+            $defaultPath = self::DEFAULT_AVATARS['default'];
+        }
+
+        // Check if the default avatar file exists in storage
+        if (Storage::disk('public')->exists($defaultPath)) {
+            return Storage::url($defaultPath);
+        }
+
+        // Fallback to a generated avatar service or placeholder
+        return $this->generatePlaceholderAvatar();
+    }
+
+    public function generatePlaceholderAvatar(): string
+    {
+        $initials = $this->getInitialsAttribute();
+        $backgroundColor = $this->generateColorFromName();
+
+        // Use UI Avatars service (external)
+        return "https://ui-avatars.com/api/?name=" . urlencode($initials)
+            . "&background=" . substr($backgroundColor, 1)
+            . "&color=ffffff&size=400&font-size=0.5&bold=true";
+    }
+
+    public function generateColorFromName(): string
+    {
+        $colors = [
+            '#FF6B6B',
+            '#4ECDC4',
+            '#45B7D1',
+            '#96CEB4',
+            '#FFEAA7',
+            '#DDA0DD',
+            '#98D8C8',
+            '#F7DC6F',
+            '#BB8FCE',
+            '#85C1E9',
+            '#F8C471',
+            '#82E0AA',
+            '#F1948A',
+            '#85C1E9',
+            '#F4D03F'
+        ];
+
+        $hash = crc32($this->name ?? 'default');
+        $index = abs($hash) % count($colors);
+
+        return $colors[$index];
     }
 
     // Add hasRole method if using without Spatie Permission
@@ -50,6 +139,7 @@ class Member extends Authenticatable implements FilamentUser
         // Implement your role checking logic here
         return false; // or use Spatie Permission trait
     }
+
     // ✅ IMPROVED: Added more security-sensitive fields
     protected $hidden = [
         'password',
@@ -107,7 +197,6 @@ class Member extends Authenticatable implements FilamentUser
         return $this->hasMany(MemberStoryRating::class);
     }
 
-
     // ✅ IMPROVED: More efficient relationship queries with proper pivot selection
     public function likedStories(): BelongsToMany
     {
@@ -147,19 +236,23 @@ class Member extends Authenticatable implements FilamentUser
     |--------------------------------------------------------------------------
     */
 
-    // ✅ IMPROVED: Modern accessor syntax with proper Storage facade usage
+    // ✅ ENHANCED: Keep your existing modern accessor but add fallback logic
     protected function avatarUrl(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: function () {
+                // First check custom avatar
                 if ($this->avatar && Storage::disk('public')->exists("members/avatars/{$this->avatar}")) {
                     return Storage::url("members/avatars/{$this->avatar}");
                 }
 
-                // ✅ IMPROVED: Fallback to Gravatar, then default
-                $gravatar = 'https://www.gravatar.com/avatar/' . md5(strtolower(trim($this->email))) . '?d=mp&s=200';
+                // Check if avatar exists in different path format
+                if ($this->avatar && Storage::disk('public')->exists($this->avatar)) {
+                    return Storage::url($this->avatar);
+                }
 
-                return $gravatar;
+                // Return default avatar instead of Gravatar as final fallback
+                return $this->getDefaultAvatarUrl();
             }
         );
     }
@@ -243,6 +336,17 @@ class Member extends Authenticatable implements FilamentUser
     public function scopeByGender(Builder $query, string $gender): Builder
     {
         return $query->where('gender', $gender);
+    }
+
+    // ✅ NEW: Add default avatar scopes
+    public function scopeWithCustomAvatar(Builder $query): Builder
+    {
+        return $query->whereNotNull('avatar');
+    }
+
+    public function scopeWithoutCustomAvatar(Builder $query): Builder
+    {
+        return $query->whereNull('avatar');
     }
 
     /*
@@ -426,6 +530,26 @@ class Member extends Authenticatable implements FilamentUser
 
     public function getFilamentAvatarUrl(): ?string
     {
-        return $this->avatar_url;
+        return $this->avatar_url; // Now this will always return a URL, never null
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ✅ NEW: MODEL EVENTS for default avatar handling
+    |--------------------------------------------------------------------------
+    */
+
+    protected static function booted(): void
+    {
+        // Log when avatar is updated
+        static::updating(function ($member) {
+            if ($member->isDirty('avatar')) {
+                Log::info('Member avatar updated', [
+                    'member_id' => $member->id,
+                    'old_avatar' => $member->getOriginal('avatar'),
+                    'new_avatar' => $member->avatar,
+                ]);
+            }
+        });
     }
 }

@@ -34,21 +34,45 @@ class DemoDataSeeder extends Seeder
         $stories = Story::where('active', true)->get();
         $members = Member::where('status', 'active')->get();
 
+        if ($members->isEmpty() || $stories->isEmpty()) {
+            $this->command->info('⚠️ No active members or stories found, skipping reading history...');
+            return;
+        }
+
+        $created = 0;
+        $updated = 0;
+
         foreach ($members->random(min(20, $members->count())) as $member) {
             $readStories = $stories->random(rand(5, 15));
 
             foreach ($readStories as $story) {
-                MemberReadingHistory::create([
-                    'member_id' => $member->id,
-                    'story_id' => $story->id,
-                    'reading_progress' => rand(10, 100),
-                    'time_spent' => rand(30, 600), // 30 seconds to 10 minutes
-                    'last_read_at' => now()->subDays(rand(0, 30)),
-                ]);
+                // Use updateOrCreate to handle existing records
+                $history = MemberReadingHistory::updateOrCreate(
+                    [
+                        'member_id' => $member->id,
+                        'story_id' => $story->id,
+                    ],
+                    [
+                        'reading_progress' => rand(10, 100),
+                        'time_spent' => rand(30, 600), // 30 seconds to 10 minutes
+                        'last_read_at' => now()->subDays(rand(0, 30)),
+                        'reading_sessions' => rand(1, 5),
+                        'metadata' => [
+                            'device_type' => \Faker\Factory::create()->randomElement(['mobile', 'tablet', 'desktop']),
+                            'source' => 'demo_seeder',
+                        ],
+                    ]
+                );
+
+                if ($history->wasRecentlyCreated) {
+                    $created++;
+                } else {
+                    $updated++;
+                }
             }
         }
 
-        $this->command->info('✓ Reading History seeded');
+        $this->command->info("✓ Reading History seeded - Created: {$created}, Updated: {$updated}");
     }
 
     private function seedPublishingHistory()
@@ -57,24 +81,40 @@ class DemoDataSeeder extends Seeder
 
         $stories = Story::all();
         $admins = User::whereHas('roles', function ($q) {
-            $q->whereIn('name', ['admin', 'super-admin', 'editor']);
+            $q->whereIn('name', ['admin', 'super_admin', 'super-admin', 'editor']);
         })->get();
 
-        foreach ($stories->random(min(10, $stories->count())) as $story) {
-            StoryPublishingHistory::create([
-                'story_id' => $story->id,
-                'user_id' => $admins->random()->id,
-                'action' => 'published',
-                'previous_active_status' => false,
-                'new_active_status' => true,
-                'new_active_from' => $story->active_from,
-                'new_active_until' => $story->active_until,
-                'notes' => 'Initial publication',
-                'ip_address' => '127.0.0.1',
-                'created_at' => $story->created_at,
-            ]);
+        if ($admins->isEmpty()) {
+            $this->command->info('⚠️ No admin users found, skipping publishing history...');
+            return;
         }
 
-        $this->command->info('✓ Publishing History seeded');
+        $created = 0;
+
+        foreach ($stories->random(min(10, $stories->count())) as $story) {
+            // Check if publishing history already exists for this story
+            $existingHistory = StoryPublishingHistory::where('story_id', $story->id)
+                ->where('action', 'published')
+                ->first();
+
+            if (!$existingHistory) {
+                StoryPublishingHistory::create([
+                    'story_id' => $story->id,
+                    'user_id' => $admins->random()->id,
+                    'action' => 'published',
+                    'previous_active_status' => false,
+                    'new_active_status' => true,
+                    'new_active_from' => $story->active_from,
+                    'new_active_until' => $story->active_until,
+                    'notes' => 'Initial publication via demo seeder',
+                    'ip_address' => '127.0.0.1',
+                    'created_at' => $story->created_at,
+                    'updated_at' => $story->created_at,
+                ]);
+                $created++;
+            }
+        }
+
+        $this->command->info("✓ Publishing History seeded - Created: {$created} new records");
     }
 }

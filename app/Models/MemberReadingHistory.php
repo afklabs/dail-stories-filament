@@ -15,24 +15,30 @@ class MemberReadingHistory extends Model
 
     protected $table = 'member_reading_history';
 
-    // ✅ IMPROVED: Better organized fillable with validation in mind
+    // ✅ UPDATED: Include new fields in fillable
     protected $fillable = [
         'member_id',
         'story_id',
         'reading_progress',
         'time_spent',
         'last_read_at',
+        'reading_sessions',  // New field
+        'bookmarks',         // New field
+        'metadata',          // New field
     ];
 
-    // ✅ IMPROVED: Enhanced casting with proper types
+    // ✅ FIXED: Add proper casts for new JSON fields
     protected $casts = [
         'reading_progress' => 'decimal:2',
         'time_spent' => 'integer',
+        'reading_sessions' => 'integer',  // New field
         'last_read_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'member_id' => 'integer',
         'story_id' => 'integer',
+        'bookmarks' => 'array',           // New JSON field
+        'metadata' => 'array',            // New JSON field
     ];
 
     /*
@@ -109,6 +115,11 @@ class MemberReadingHistory extends Model
         return $query->where('time_spent', '>=', $minMinutes * 60);
     }
 
+    public function scopeMultipleSessions(Builder $query): Builder
+    {
+        return $query->where('reading_sessions', '>', 1);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | ACCESSORS - ✅ IMPROVED with Laravel 9+ syntax and better validation
@@ -122,30 +133,17 @@ class MemberReadingHistory extends Model
         );
     }
 
-    protected function formattedTimeSpent(): \Illuminate\Database\Eloquent\Casts\Attribute
+    protected function timeSpentMinutes(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: function () {
-                $totalSeconds = (int) $this->time_spent;
-                $hours = intdiv($totalSeconds, 3600);
-                $minutes = intdiv($totalSeconds % 3600, 60);
-                $seconds = $totalSeconds % 60;
-
-                if ($hours > 0) {
-                    return sprintf('%dh %dm %ds', $hours, $minutes, $seconds);
-                } elseif ($minutes > 0) {
-                    return sprintf('%dm %ds', $minutes, $seconds);
-                }
-
-                return sprintf('%ds', $seconds);
-            }
+            get: fn() => round($this->time_spent / 60, 1)
         );
     }
 
-    protected function timeSpentInMinutes(): \Illuminate\Database\Eloquent\Casts\Attribute
+    protected function timeSpentHours(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => round((float) $this->time_spent / 60, 2)
+            get: fn() => round($this->time_spent / 3600, 2)
         );
     }
 
@@ -156,327 +154,155 @@ class MemberReadingHistory extends Model
         );
     }
 
-    protected function isStarted(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => $this->reading_progress > 0
-        );
-    }
-
     protected function progressStatus(): \Illuminate\Database\Eloquent\Casts\Attribute
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: function () {
-                return match (true) {
-                    $this->reading_progress <= 0 => 'not_started',
-                    $this->reading_progress >= 100 => 'completed',
-                    $this->reading_progress >= 75 => 'almost_done',
-                    $this->reading_progress >= 25 => 'in_progress',
-                    default => 'just_started'
-                };
+                if ($this->reading_progress >= 100) return 'completed';
+                if ($this->reading_progress > 50) return 'halfway';
+                if ($this->reading_progress > 0) return 'started';
+                return 'not_started';
             }
-        );
-    }
-
-    protected function progressColor(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => match ($this->progress_status) {
-                'not_started' => 'gray',
-                'just_started' => 'blue',
-                'in_progress' => 'yellow',
-                'almost_done' => 'orange',
-                'completed' => 'green',
-                default => 'gray'
-            }
-        );
-    }
-
-    protected function lastReadHuman(): \Illuminate\Database\Eloquent\Casts\Attribute
-    {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
-            get: fn() => $this->last_read_at?->diffForHumans() ?? 'Never'
         );
     }
 
     /*
     |--------------------------------------------------------------------------
-    | METHODS - ✅ IMPROVED with better error handling and validation
+    | HELPER METHODS - ✅ NEW: Enhanced functionality
     |--------------------------------------------------------------------------
     */
 
-    public function updateProgress(float $progress, int $additionalTime = 0): bool
+    /**
+     * Get metadata value safely
+     */
+    public function getMetadata(string $key, $default = null)
     {
-        try {
-            // Validate input
-            $progress = max(0, min(100, $progress));
-            $additionalTime = max(0, $additionalTime);
+        return $this->metadata[$key] ?? $default;
+    }
 
-            return $this->update([
+    /**
+     * Set metadata value safely
+     */
+    public function setMetadata(string $key, $value): void
+    {
+        $metadata = $this->metadata ?? [];
+        $metadata[$key] = $value;
+        $this->metadata = $metadata;
+    }
+
+    /**
+     * Add bookmark position
+     */
+    public function addBookmark(int $position, string $note = null): void
+    {
+        $bookmarks = $this->bookmarks ?? [];
+        $bookmarks[] = [
+            'position' => $position,
+            'note' => $note,
+            'created_at' => now()->toISOString(),
+        ];
+        $this->bookmarks = $bookmarks;
+    }
+
+    /**
+     * Remove bookmark by position
+     */
+    public function removeBookmark(int $position): void
+    {
+        if (!$this->bookmarks) return;
+
+        $bookmarks = collect($this->bookmarks)
+            ->filter(fn($bookmark) => $bookmark['position'] !== $position)
+            ->values()
+            ->toArray();
+
+        $this->bookmarks = $bookmarks;
+    }
+
+    /**
+     * Get all bookmark positions
+     */
+    public function getBookmarkPositions(): array
+    {
+        if (!$this->bookmarks) return [];
+
+        return collect($this->bookmarks)
+            ->pluck('position')
+            ->toArray();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STATIC HELPER METHODS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Create or update reading history
+     */
+    public static function recordProgress(
+        int $memberId,
+        int $storyId,
+        float $progress,
+        int $timeSpent = 0,
+        array $metadata = []
+    ): self {
+        // Find existing record
+        $history = self::where('member_id', $memberId)
+            ->where('story_id', $storyId)
+            ->first();
+
+        if ($history) {
+            // Update existing record
+            $history->update([
                 'reading_progress' => $progress,
-                'time_spent' => $this->time_spent + $additionalTime,
+                'time_spent' => $timeSpent,
                 'last_read_at' => now(),
+                'reading_sessions' => $history->reading_sessions + 1, // Safe increment
+                'metadata' => array_merge($history->metadata ?? [], $metadata),
             ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to update reading progress', [
-                'history_id' => $this->id,
-                'progress' => $progress,
-                'additional_time' => $additionalTime,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
-    }
-
-    public function markCompleted(int $additionalTime = 0): bool
-    {
-        return $this->updateProgress(100, $additionalTime);
-    }
-
-    public function addReadingTime(int $seconds): bool
-    {
-        try {
-            return $this->update([
-                'time_spent' => $this->time_spent + max(0, $seconds),
+        } else {
+            // Create new record
+            $history = self::create([
+                'member_id' => $memberId,
+                'story_id' => $storyId,
+                'reading_progress' => $progress,
+                'time_spent' => $timeSpent,
                 'last_read_at' => now(),
+                'reading_sessions' => 1, // Start with 1 for new records
+                'metadata' => $metadata,
             ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to add reading time', [
-                'history_id' => $this->id,
-                'seconds' => $seconds,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
         }
+
+        return $history;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | STATIC METHODS - ✅ IMPROVED with caching and performance optimization
-    |--------------------------------------------------------------------------
-    */
-
+    /**
+     * Get reading statistics for a member
+     */
     public static function getMemberStats(int $memberId): array
     {
-        return cache()->remember("member_reading_stats_{$memberId}", 300, function () use ($memberId) {
-            $history = self::where('member_id', $memberId);
+        $stats = self::where('member_id', $memberId)
+            ->selectRaw('
+                COUNT(*) as total_stories,
+                SUM(CASE WHEN reading_progress >= 100 THEN 1 ELSE 0 END) as completed_stories,
+                SUM(CASE WHEN reading_progress > 0 AND reading_progress < 100 THEN 1 ELSE 0 END) as in_progress_stories,
+                AVG(reading_progress) as avg_progress,
+                SUM(time_spent) as total_time_spent,
+                SUM(reading_sessions) as total_sessions
+            ')
+            ->first();
 
-            $totalStories = $history->count();
-            $completedStories = $history->clone()->completed()->count();
-
-            return [
-                'total_stories' => $totalStories,
-                'completed_stories' => $completedStories,
-                'in_progress_stories' => $history->clone()->inProgress()->count(),
-                'not_started_stories' => $history->clone()->notStarted()->count(),
-                'total_reading_time_minutes' => round($history->sum('time_spent') / 60, 2),
-                'avg_progress' => round($history->avg('reading_progress'), 2),
-                'avg_reading_time_minutes' => round($history->avg('time_spent') / 60, 2),
-                'completion_rate' => $totalStories > 0
-                    ? round(($completedStories / $totalStories) * 100, 1)
-                    : 0,
-                'last_read_at' => $history->latest('last_read_at')->value('last_read_at'),
-            ];
-        });
-    }
-
-    public static function getStoryStats(int $storyId): array
-    {
-        return cache()->remember("story_reading_stats_{$storyId}", 300, function () use ($storyId) {
-            $history = self::where('story_id', $storyId);
-
-            $totalReaders = $history->count();
-            $completedReaders = $history->clone()->completed()->count();
-
-            return [
-                'total_readers' => $totalReaders,
-                'completed_readers' => $completedReaders,
-                'in_progress_readers' => $history->clone()->inProgress()->count(),
-                'avg_progress' => round($history->avg('reading_progress'), 2),
-                'avg_reading_time_minutes' => round($history->avg('time_spent') / 60, 2),
-                'total_reading_time_minutes' => round($history->sum('time_spent') / 60, 2),
-                'completion_rate' => $totalReaders > 0
-                    ? round(($completedReaders / $totalReaders) * 100, 1)
-                    : 0,
-                'most_recent_read' => $history->latest('last_read_at')->value('last_read_at'),
-            ];
-        });
-    }
-
-    public static function getTopReaders(int $limit = 10): Collection
-    {
-        return cache()->remember("top_readers_{$limit}", 600, function () use ($limit) {
-            return self::with(['member:id,name,email'])
-                ->selectRaw('member_id, SUM(time_spent) as total_time, COUNT(*) as stories_count, AVG(reading_progress) as avg_progress')
-                ->groupBy('member_id')
-                ->having('total_time', '>', 0)
-                ->orderByDesc('total_time')
-                ->limit($limit)
-                ->get();
-        });
-    }
-
-    public static function getMostReadStories(int $limit = 10): Collection
-    {
-        return cache()->remember("most_read_stories_{$limit}", 600, function () use ($limit) {
-            return self::with(['story:id,title,slug'])
-                ->selectRaw('story_id, COUNT(*) as readers_count, AVG(reading_progress) as avg_progress, SUM(time_spent) as total_time')
-                ->groupBy('story_id')
-                ->having('readers_count', '>', 0)
-                ->orderByDesc('readers_count')
-                ->limit($limit)
-                ->get();
-        });
-    }
-
-    public static function getReadingTrends(int $days = 30): Collection
-    {
-        return cache()->remember("reading_trends_{$days}", 300, function () use ($days) {
-            return self::selectRaw('DATE(last_read_at) as date, COUNT(DISTINCT member_id) as unique_readers, COUNT(*) as total_sessions, AVG(reading_progress) as avg_progress, SUM(time_spent) as total_time')
-                ->where('last_read_at', '>=', now()->subDays($days))
-                ->groupBy('date')
-                ->orderByDesc('date')
-                ->get()
-                ->map(function ($item) {
-                    $item->total_time_minutes = round($item->total_time / 60, 2);
-                    $item->avg_progress = round($item->avg_progress, 2);
-
-                    return $item;
-                });
-        });
-    }
-
-    // ✅ NEW: Additional analytics methods
-    public static function getCompletionTrends(int $days = 30): array
-    {
-        return cache()->remember("completion_trends_{$days}", 300, function () use ($days) {
-            $data = self::selectRaw('DATE(last_read_at) as date, COUNT(*) as total, SUM(CASE WHEN reading_progress >= 100 THEN 1 ELSE 0 END) as completed')
-                ->where('last_read_at', '>=', now()->subDays($days))
-                ->groupBy('date')
-                ->orderBy('date')
-                ->get();
-
-            return $data->map(function ($item) {
-                $item->completion_rate = $item->total > 0
-                    ? round(($item->completed / $item->total) * 100, 2)
-                    : 0;
-
-                return $item;
-            })->toArray();
-        });
-    }
-
-    public static function getAverageReadingSpeed(): float
-    {
-        return cache()->remember('avg_reading_speed', 1800, function () {
-            // Assuming average story is ~1000 words
-            $avgWordsPerStory = 1000;
-            $avgTimeSpent = self::where('reading_progress', '>=', 100)
-                ->avg('time_spent');
-
-            if (! $avgTimeSpent || $avgTimeSpent <= 0) {
-                return 250; // Default words per minute
-            }
-
-            return round(($avgWordsPerStory / ($avgTimeSpent / 60)), 2);
-        });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | MODEL EVENTS - ✅ IMPROVED with better performance and error handling
-    |--------------------------------------------------------------------------
-    */
-
-    protected static function boot(): void
-    {
-        parent::boot();
-
-        // ✅ IMPROVED: Better event handling with error catching
-        static::updating(function ($model) {
-            if ($model->isDirty(['reading_progress', 'time_spent'])) {
-                $model->last_read_at = now();
-            }
-        });
-
-        static::saved(function ($model) {
-            try {
-                // Clear related caches
-                cache()->forget("member_reading_stats_{$model->member_id}");
-                cache()->forget("story_reading_stats_{$model->story_id}");
-
-                // Update story view if member exists and has device_id
-                if ($model->member && $model->member->device_id) {
-                    \App\Models\StoryView::updateOrCreate(
-                        [
-                            'story_id' => $model->story_id,
-                            'member_id' => $model->member_id,
-                        ],
-                        [
-                            'device_id' => $model->member->device_id,
-                            'user_agent' => request()->header('User-Agent', 'Unknown'),
-                            'ip_address' => request()->ip(),
-                            'viewed_at' => now(),
-                        ]
-                    );
-                }
-            } catch (\Exception $e) {
-                Log::error('Error in MemberReadingHistory saved event', [
-                    'model_id' => $model->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATION - ✅ IMPROVED with comprehensive rules
-    |--------------------------------------------------------------------------
-    */
-
-    public static function rules(): array
-    {
         return [
-            'member_id' => 'required|integer|exists:members,id',
-            'story_id' => 'required|integer|exists:stories,id',
-            'reading_progress' => 'required|numeric|min:0|max:100',
-            'time_spent' => 'required|integer|min:0|max:86400', // Max 24 hours
-            'last_read_at' => 'nullable|date',
+            'total_stories' => $stats->total_stories ?? 0,
+            'completed_stories' => $stats->completed_stories ?? 0,
+            'in_progress_stories' => $stats->in_progress_stories ?? 0,
+            'completion_rate' => $stats->total_stories > 0
+                ? round(($stats->completed_stories / $stats->total_stories) * 100, 1)
+                : 0,
+            'average_progress' => round($stats->avg_progress ?? 0, 1),
+            'total_time_spent_minutes' => round(($stats->total_time_spent ?? 0) / 60, 1),
+            'total_sessions' => $stats->total_sessions ?? 0,
         ];
-    }
-
-    public static function messages(): array
-    {
-        return [
-            'member_id.exists' => 'The selected member does not exist.',
-            'story_id.exists' => 'The selected story does not exist.',
-            'reading_progress.max' => 'Reading progress cannot exceed 100%.',
-            'time_spent.max' => 'Time spent cannot exceed 24 hours.',
-        ];
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | FILAMENT INTEGRATION - ✅ NEW for better admin interface
-    |--------------------------------------------------------------------------
-    */
-
-    public function getFilamentName(): string
-    {
-        return $this->member?->name . ' → ' . $this->story?->title;
-    }
-
-    public function getProgressBadgeColor(): string
-    {
-        return match (true) {
-            $this->reading_progress >= 100 => 'success',
-            $this->reading_progress >= 75 => 'warning',
-            $this->reading_progress >= 25 => 'info',
-            $this->reading_progress > 0 => 'primary',
-            default => 'gray'
-        };
     }
 }

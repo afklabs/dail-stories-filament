@@ -9,6 +9,52 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @property int $id
+ * @property int $member_id
+ * @property int $story_id
+ * @property numeric $reading_progress
+ * @property int $time_spent
+ * @property int $reading_sessions
+ * @property array<array-key, mixed>|null $bookmarks
+ * @property array<array-key, mixed>|null $metadata
+ * @property \Illuminate\Support\Carbon $last_read_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read mixed $is_completed
+ * @property-read \App\Models\Member $member
+ * @property-read mixed $progress_percentage
+ * @property-read mixed $progress_status
+ * @property-read \App\Models\Story $story
+ * @property-read mixed $time_spent_hours
+ * @property-read mixed $time_spent_minutes
+ * @method static Builder<static>|MemberReadingHistory byMember(int $memberId)
+ * @method static Builder<static>|MemberReadingHistory byProgress(float $min = 0, float $max = 100)
+ * @method static Builder<static>|MemberReadingHistory byStory(int $storyId)
+ * @method static Builder<static>|MemberReadingHistory completed()
+ * @method static Builder<static>|MemberReadingHistory highProgress()
+ * @method static Builder<static>|MemberReadingHistory inProgress()
+ * @method static Builder<static>|MemberReadingHistory longReads(int $minMinutes = 30)
+ * @method static Builder<static>|MemberReadingHistory multipleSessions()
+ * @method static Builder<static>|MemberReadingHistory newModelQuery()
+ * @method static Builder<static>|MemberReadingHistory newQuery()
+ * @method static Builder<static>|MemberReadingHistory notStarted()
+ * @method static Builder<static>|MemberReadingHistory query()
+ * @method static Builder<static>|MemberReadingHistory recentlyRead(int $days = 7)
+ * @method static Builder<static>|MemberReadingHistory started()
+ * @method static Builder<static>|MemberReadingHistory whereBookmarks($value)
+ * @method static Builder<static>|MemberReadingHistory whereCreatedAt($value)
+ * @method static Builder<static>|MemberReadingHistory whereId($value)
+ * @method static Builder<static>|MemberReadingHistory whereLastReadAt($value)
+ * @method static Builder<static>|MemberReadingHistory whereMemberId($value)
+ * @method static Builder<static>|MemberReadingHistory whereMetadata($value)
+ * @method static Builder<static>|MemberReadingHistory whereReadingProgress($value)
+ * @method static Builder<static>|MemberReadingHistory whereReadingSessions($value)
+ * @method static Builder<static>|MemberReadingHistory whereStoryId($value)
+ * @method static Builder<static>|MemberReadingHistory whereTimeSpent($value)
+ * @method static Builder<static>|MemberReadingHistory whereUpdatedAt($value)
+ * @mixin \Eloquent
+ */
 class MemberReadingHistory extends Model
 {
     use HasFactory;

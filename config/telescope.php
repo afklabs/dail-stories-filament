@@ -149,108 +149,93 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Telescope Watchers
+    | Telescope Watchers - ALL ENABLED
     |--------------------------------------------------------------------------
     |
-    | The following array lists the "watchers" that will be registered with
-    | Telescope. The watchers gather the application's profile data when
-    | a request or task is executed. Optimized for story platform debugging.
+    | ALL watchers are enabled for maximum debugging capability.
+    | ⚠️  WARNING: This will generate A LOT of data - use only in development!
     |
     */
 
     'watchers' => [
-        // 🚨 HIGH PRIORITY - Essential for API debugging
+        // 🚨 Core Application Watchers - ALWAYS ENABLED
         Watchers\RequestWatcher::class => [
-            'enabled' => env('TELESCOPE_REQUEST_WATCHER', true),
-            'size_limit' => env('TELESCOPE_RESPONSE_SIZE_LIMIT', 64), // KB
-            'ignore_http_methods' => [], // Track all HTTP methods
-            'ignore_status_codes' => [404, 410], // Skip common not found errors
+            'enabled' => true,
+            'size_limit' => 128, // Increased for full debugging
+            'ignore_http_methods' => [], // Track ALL HTTP methods
+            'ignore_status_codes' => [], // Track ALL status codes
         ],
 
-        // 🚨 HIGH PRIORITY - Database query optimization
         Watchers\QueryWatcher::class => [
-            'enabled' => env('TELESCOPE_QUERY_WATCHER', true),
-            'ignore_packages' => true, // Ignore vendor package queries
-            'ignore_paths' => [
-                'telescope*', // Don't log Telescope's own queries
-            ],
-            'slow' => env('TELESCOPE_SLOW_QUERY_THRESHOLD', 50), // Log queries slower than 50ms
+            'enabled' => true,
+            'ignore_packages' => false, // Show ALL queries including vendor
+            'ignore_paths' => [], // Show ALL paths
+            'slow' => 10, // Log queries slower than 10ms (very sensitive)
         ],
 
-        // 🚨 HIGH PRIORITY - Cache performance monitoring
-        Watchers\CacheWatcher::class => [
-            'enabled' => env('TELESCOPE_CACHE_WATCHER', true),
-            'hidden' => [], // Show all cache operations
-            'ignore' => [
-                'telescope:*', // Ignore Telescope cache operations
-            ],
-        ],
-
-        // 🚨 HIGH PRIORITY - Redis monitoring (if used)
-        Watchers\RedisWatcher::class => env('TELESCOPE_REDIS_WATCHER', true),
-
-        // 🔍 MEDIUM PRIORITY - Application debugging
-        Watchers\ExceptionWatcher::class => env('TELESCOPE_EXCEPTION_WATCHER', true),
+        Watchers\ExceptionWatcher::class => true,
 
         Watchers\LogWatcher::class => [
-            'enabled' => env('TELESCOPE_LOG_WATCHER', true),
-            'level' => env('TELESCOPE_LOG_LEVEL', 'error'), // Only capture error+ logs
+            'enabled' => true,
+            'level' => 'debug', // Capture ALL log levels
         ],
 
+        // 🔍 Model & Database Watchers - FULLY ENABLED
         Watchers\ModelWatcher::class => [
-            'enabled' => env('TELESCOPE_MODEL_WATCHER', true),
-            'events' => ['eloquent.*'], // Track all Eloquent events
+            'enabled' => true,
+            'events' => ['eloquent.*'], // ALL Eloquent events
             'hydrations' => true, // Track model hydrations
         ],
 
-        // Job monitoring (important for story processing)
-        Watchers\JobWatcher::class => env('TELESCOPE_JOB_WATCHER', true),
+        Watchers\CacheWatcher::class => [
+            'enabled' => true,
+            'hidden' => [], // Show ALL cache operations
+            'ignore' => [], // Don't ignore anything
+        ],
+
+        Watchers\RedisWatcher::class => true,
+
+        // 🚀 Background Processing Watchers - ALL ENABLED
+        Watchers\JobWatcher::class => true,
+
+        Watchers\BatchWatcher::class => true,
+
+        Watchers\ScheduleWatcher::class => true,
 
         Watchers\CommandWatcher::class => [
-            'enabled' => env('TELESCOPE_COMMAND_WATCHER', true),
-            'ignore' => [
-                'telescope:*',
-                'schedule:*',
-                'horizon:*',
-                'queue:*',
-            ],
+            'enabled' => true,
+            'ignore' => [], // Show ALL commands
         ],
 
-        // Event tracking
-        Watchers\EventWatcher::class => [
-            'enabled' => env('TELESCOPE_EVENT_WATCHER', true),
-            'ignore' => [
-                'Illuminate\Log\Events\MessageLogged',
-                'Illuminate\Queue\Events\*',
-            ],
-        ],
+        // 📧 Communication Watchers - ALL ENABLED
+        Watchers\MailWatcher::class => true,
 
-        // Authorization debugging
+        Watchers\NotificationWatcher::class => true,
+
+        // 🔐 Security & Authorization Watchers - ALL ENABLED
         Watchers\GateWatcher::class => [
-            'enabled' => env('TELESCOPE_GATE_WATCHER', true),
-            'ignore_abilities' => [],
-            'ignore_packages' => true,
-            'ignore_paths' => [
-                'telescope*',
-            ],
+            'enabled' => true,
+            'ignore_abilities' => [], // Show ALL abilities
+            'ignore_packages' => false, // Show package gates too
+            'ignore_paths' => [], // Show ALL paths
         ],
 
-        // 📧 LOW PRIORITY - Enable only if you send emails
-        Watchers\MailWatcher::class => env('TELESCOPE_MAIL_WATCHER', false),
+        // 🌐 External Communication Watchers - ALL ENABLED
+        Watchers\ClientRequestWatcher::class => true,
 
-        Watchers\NotificationWatcher::class => env('TELESCOPE_NOTIFICATION_WATCHER', false),
+        // 🎭 View & Frontend Watchers - ALL ENABLED
+        Watchers\ViewWatcher::class => true,
 
-        // Development tools
+        // 🔧 Development Tools - ALL ENABLED
         Watchers\DumpWatcher::class => [
-            'enabled' => env('TELESCOPE_DUMP_WATCHER', true),
-            'always' => env('TELESCOPE_DUMP_WATCHER_ALWAYS', false),
+            'enabled' => true,
+            'always' => true, // Always capture dumps
         ],
 
-        Watchers\ViewWatcher::class => env('TELESCOPE_VIEW_WATCHER', false), // Disable for API-only apps
-
-        // Advanced watchers
-        Watchers\BatchWatcher::class => env('TELESCOPE_BATCH_WATCHER', true),
-        Watchers\ClientRequestWatcher::class => env('TELESCOPE_CLIENT_REQUEST_WATCHER', false), // Enable if using HTTP client
-        Watchers\ScheduleWatcher::class => env('TELESCOPE_SCHEDULE_WATCHER', true),
+        // 📊 Event System - ALL ENABLED
+        Watchers\EventWatcher::class => [
+            'enabled' => true,
+            'ignore' => [], // Show ALL events
+        ],
     ],
 ];

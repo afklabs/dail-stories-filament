@@ -1,0 +1,4 @@
+# PHPStan
+/build/phpstan/
+phpstan-baseline.neon
+.phpstan-cache/

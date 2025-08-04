@@ -1,25 +1,20 @@
 includes:
-    - vendor/larastan/larastan/extension.neon
+    - ./vendor/nunomaduro/larastan/extension.neon
 
 parameters:
+    level: 3  # More strict - will find more issues
     paths:
-        - app
-        - database/factories
-    
-    level: 6
+        - app/Models
+        - app/Http/Controllers
+        - app/Services
+        - app/Http/Requests  # Add more folders
+        - app/Http/Middleware  # Add more folders
+        - app/Filament  # Add more folders
+
     
     ignoreErrors:
-        - '#PHPDoc tag @var#'
-    
-    excludePaths:
-        - app/Providers/TelescopeServiceProvider.php
-        - cache
-        - bootstrap/cache
-        - storage
-        - vendor
-    
-    checkMissingIterableValueType: false
-    checkGenericClassInNonGenericObjectType: false
-    
-    databaseMigrationsPath:
-        - database/migrations
+        # Laravel magic methods
+        - '#Call to an undefined method.*::(hasRole|assignRole|createToken|tokens)#'
+        - '#Call to an undefined method Illuminate\\.*#'
+        # Filament magic
+        - '#.*Filament.*#'

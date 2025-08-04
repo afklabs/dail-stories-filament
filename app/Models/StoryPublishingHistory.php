@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 
 /**
  * StoryPublishingHistory Model for Daily Stories App with Filament Integration
- *
+ * 
  * Enhanced audit trail system for tracking story publishing activities
  * with comprehensive analytics and monitoring capabilities.
  *
@@ -34,6 +34,44 @@ use Illuminate\Support\Str;
  * @property string|null $user_agent
  * @property Carbon $created_at
  * @property Carbon $updated_at
+ * @property-read string $action_color
+ * @property-read string $action_icon
+ * @property-read string $changes_summary
+ * @property-read string $formatted_action
+ * @property-read string $impact_level
+ * @property-read string $schedule_change
+ * @property-read string $status_change
+ * @property-read \App\Models\Story $story
+ * @property-read \App\Models\User $user
+ * @method static Builder<static>|StoryPublishingHistory byAction(string $action)
+ * @method static Builder<static>|StoryPublishingHistory byStory(int $storyId)
+ * @method static Builder<static>|StoryPublishingHistory byUser(int $userId)
+ * @method static Builder<static>|StoryPublishingHistory highImpact()
+ * @method static Builder<static>|StoryPublishingHistory newModelQuery()
+ * @method static Builder<static>|StoryPublishingHistory newQuery()
+ * @method static Builder<static>|StoryPublishingHistory publishingActions()
+ * @method static Builder<static>|StoryPublishingHistory query()
+ * @method static Builder<static>|StoryPublishingHistory recent(int $days = 7)
+ * @method static Builder<static>|StoryPublishingHistory schedulingActions()
+ * @method static Builder<static>|StoryPublishingHistory thisWeek()
+ * @method static Builder<static>|StoryPublishingHistory today()
+ * @method static Builder<static>|StoryPublishingHistory whereAction($value)
+ * @method static Builder<static>|StoryPublishingHistory whereChangedFields($value)
+ * @method static Builder<static>|StoryPublishingHistory whereCreatedAt($value)
+ * @method static Builder<static>|StoryPublishingHistory whereId($value)
+ * @method static Builder<static>|StoryPublishingHistory whereIpAddress($value)
+ * @method static Builder<static>|StoryPublishingHistory whereNewActiveFrom($value)
+ * @method static Builder<static>|StoryPublishingHistory whereNewActiveStatus($value)
+ * @method static Builder<static>|StoryPublishingHistory whereNewActiveUntil($value)
+ * @method static Builder<static>|StoryPublishingHistory whereNotes($value)
+ * @method static Builder<static>|StoryPublishingHistory wherePreviousActiveFrom($value)
+ * @method static Builder<static>|StoryPublishingHistory wherePreviousActiveStatus($value)
+ * @method static Builder<static>|StoryPublishingHistory wherePreviousActiveUntil($value)
+ * @method static Builder<static>|StoryPublishingHistory whereStoryId($value)
+ * @method static Builder<static>|StoryPublishingHistory whereUpdatedAt($value)
+ * @method static Builder<static>|StoryPublishingHistory whereUserAgent($value)
+ * @method static Builder<static>|StoryPublishingHistory whereUserId($value)
+ * @mixin \Eloquent
  */
 class StoryPublishingHistory extends Model
 {

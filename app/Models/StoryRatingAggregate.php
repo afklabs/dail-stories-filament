@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * StoryRatingAggregate Model for Daily Stories App with Filament Integration
- *
+ * 
  * Enhanced aggregate system for story ratings with comprehensive analytics,
  * sentiment analysis, and performance optimizations.
  *
@@ -32,6 +32,43 @@ use Illuminate\Support\Facades\Log;
  * @property Carbon|null $last_rated_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
+ * @property-read float $comments_percentage
+ * @property-read float $high_rating_percentage
+ * @property-read bool $is_high_quality
+ * @property-read bool $is_reliable
+ * @property-read float $low_rating_percentage
+ * @property-read float $medium_rating_percentage
+ * @property-read float $negative_rating_percentage
+ * @property-read float $neutral_rating_percentage
+ * @property-read float $positive_rating_percentage
+ * @property-read float $quality_score
+ * @property-read string $rating_level
+ * @property-read array $rating_percentages
+ * @property-read float $recommendation_rate
+ * @property-read float $rounded_average
+ * @property-read string $sentiment
+ * @property-read string $stars
+ * @property-read float $verified_percentage
+ * @property-read Collection<int, \App\Models\MemberStoryRating> $ratings
+ * @property-read int|null $ratings_count
+ * @property-read \App\Models\Story $story
+ * @method static Builder<static>|StoryRatingAggregate excellent()
+ * @method static Builder<static>|StoryRatingAggregate highRated(float $minRating = 4)
+ * @method static Builder<static>|StoryRatingAggregate mostRated()
+ * @method static Builder<static>|StoryRatingAggregate newModelQuery()
+ * @method static Builder<static>|StoryRatingAggregate newQuery()
+ * @method static Builder<static>|StoryRatingAggregate query()
+ * @method static Builder<static>|StoryRatingAggregate reliable()
+ * @method static Builder<static>|StoryRatingAggregate trending(int $days = 7)
+ * @method static Builder<static>|StoryRatingAggregate whereAverageRating($value)
+ * @method static Builder<static>|StoryRatingAggregate whereCreatedAt($value)
+ * @method static Builder<static>|StoryRatingAggregate whereId($value)
+ * @method static Builder<static>|StoryRatingAggregate whereRatingDistribution($value)
+ * @method static Builder<static>|StoryRatingAggregate whereStoryId($value)
+ * @method static Builder<static>|StoryRatingAggregate whereSumRatings($value)
+ * @method static Builder<static>|StoryRatingAggregate whereTotalRatings($value)
+ * @method static Builder<static>|StoryRatingAggregate whereUpdatedAt($value)
+ * @mixin \Eloquent
  */
 class StoryRatingAggregate extends Model
 {
@@ -80,8 +117,6 @@ class StoryRatingAggregate extends Model
 
     /**
      * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
      */
     protected $fillable = [
         'story_id',
@@ -97,8 +132,6 @@ class StoryRatingAggregate extends Model
 
     /**
      * The attributes that should be cast.
-     *
-     * @var array<string, string>
      */
     protected $casts = [
         'story_id' => 'integer',
@@ -303,6 +336,119 @@ class StoryRatingAggregate extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | ENHANCED TYPE-SAFE RATING METHODS - NEW ADDITIONS
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Get high rating percentage (4-5 stars) with proper type casting
+     * 
+     * FIXED: Ensures proper type comparison and handles null/undefined values
+     */
+    public function getHighRatingPercentageAttribute(): float
+    {
+        $totalRatings = (int) $this->total_ratings;
+        if ($totalRatings === 0) {
+            return 0.0;
+        }
+
+        // Safely cast rating counts to integers
+        $rating4Count = (int) ($this->rating_distribution[4] ?? 0);
+        $rating5Count = (int) ($this->rating_distribution[5] ?? 0);
+
+        $highRatings = $rating4Count + $rating5Count;
+
+        return round(($highRatings / $totalRatings) * 100, 1);
+    }
+
+    /**
+     * Get low rating percentage (1-2 stars) with proper type casting
+     * 
+     * FIXED: Ensures proper type comparison and handles null/undefined values
+     */
+    public function getLowRatingPercentageAttribute(): float
+    {
+        $totalRatings = (int) $this->total_ratings;
+        if ($totalRatings === 0) {
+            return 0.0;
+        }
+
+        // Safely cast rating counts to integers
+        $rating1Count = (int) ($this->rating_distribution[1] ?? 0);
+        $rating2Count = (int) ($this->rating_distribution[2] ?? 0);
+
+        $lowRatings = $rating1Count + $rating2Count;
+
+        return round(($lowRatings / $totalRatings) * 100, 1);
+    }
+
+    /**
+     * Get medium rating percentage (3 stars) with proper type casting
+     */
+    public function getMediumRatingPercentageAttribute(): float
+    {
+        $totalRatings = (int) $this->total_ratings;
+        if ($totalRatings === 0) {
+            return 0.0;
+        }
+
+        $rating3Count = (int) ($this->rating_distribution[3] ?? 0);
+
+        return round(($rating3Count / $totalRatings) * 100, 1);
+    }
+
+    /**
+     * Get positive rating percentage (4-5 stars) - alias for high ratings
+     */
+    public function getPositiveRatingPercentageAttribute(): float
+    {
+        return $this->high_rating_percentage;
+    }
+
+    /**
+     * Get negative rating percentage (1-2 stars) - alias for low ratings
+     */
+    public function getNegativeRatingPercentageAttribute(): float
+    {
+        return $this->low_rating_percentage;
+    }
+
+    /**
+     * Get neutral rating percentage (3 stars) - alias for medium ratings
+     */
+    public function getNeutralRatingPercentageAttribute(): float
+    {
+        return $this->medium_rating_percentage;
+    }
+
+    /**
+     * Get individual rating count with type safety
+     */
+    public function getRatingCount(int $rating): int
+    {
+        if ($rating < self::MIN_RATING || $rating > self::MAX_RATING) {
+            return 0;
+        }
+
+        return (int) ($this->rating_distribution[$rating] ?? 0);
+    }
+
+    /**
+     * Get rating distribution with type safety
+     */
+    public function getSafeRatingDistribution(): array
+    {
+        $distribution = [];
+
+        for ($i = self::MIN_RATING; $i <= self::MAX_RATING; $i++) {
+            $distribution[$i] = (int) ($this->rating_distribution[$i] ?? 0);
+        }
+
+        return $distribution;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | QUERY SCOPES
     |--------------------------------------------------------------------------
     */
@@ -367,10 +513,10 @@ class StoryRatingAggregate extends Model
             $sumRatings = $ratings->sum('rating');
             $averageRating = $totalRatings > 0 ? round($sumRatings / $totalRatings, 2) : 0;
 
-            // Distribution calculation
+            // Distribution calculation with type safety
             $distribution = [];
             for ($i = self::MIN_RATING; $i <= self::MAX_RATING; $i++) {
-                $distribution[$i] = $ratings->where('rating', $i)->count();
+                $distribution[$i] = (int) $ratings->where('rating', $i)->count();
             }
 
             // Enhanced metrics
@@ -380,15 +526,15 @@ class StoryRatingAggregate extends Model
             self::updateOrCreate(
                 ['story_id' => $storyId],
                 [
-                    'total_ratings' => $totalRatings,
-                    'sum_ratings' => $sumRatings,
-                    'average_rating' => $averageRating,
+                    'total_ratings' => (int) $totalRatings,
+                    'sum_ratings' => (int) $sumRatings,
+                    'average_rating' => (float) $averageRating,
                     'rating_distribution' => $distribution,
-                    'verified_ratings_count' => $verifiedRatings->count(),
+                    'verified_ratings_count' => (int) $verifiedRatings->count(),
                     'verified_average_rating' => $verifiedRatings->count() > 0
                         ? round($verifiedRatings->avg('rating'), 2)
                         : null,
-                    'comments_count' => $ratingsWithComments->count(),
+                    'comments_count' => (int) $ratingsWithComments->count(),
                     'last_rated_at' => $ratings->max('created_at'),
                 ]
             );
@@ -417,33 +563,38 @@ class StoryRatingAggregate extends Model
 
             return [
                 'basic_stats' => [
-                    'average_rating' => $aggregate->average_rating,
-                    'total_ratings' => $aggregate->total_ratings,
-                    'quality_score' => $aggregate->quality_score,
-                    'recommendation_rate' => $aggregate->recommendation_rate,
-                    'is_reliable' => $aggregate->is_reliable,
-                    'is_high_quality' => $aggregate->is_high_quality,
+                    'average_rating' => (float) $aggregate->average_rating,
+                    'total_ratings' => (int) $aggregate->total_ratings,
+                    'quality_score' => (float) $aggregate->quality_score,
+                    'recommendation_rate' => (float) $aggregate->recommendation_rate,
+                    'is_reliable' => (bool) $aggregate->is_reliable,
+                    'is_high_quality' => (bool) $aggregate->is_high_quality,
                 ],
                 'distribution' => [
-                    'counts' => $aggregate->rating_distribution,
+                    'counts' => $aggregate->safe_rating_distribution,
                     'percentages' => $aggregate->rating_percentages,
                 ],
                 'quality_metrics' => [
-                    'verified_count' => $aggregate->verified_ratings_count ?? 0,
-                    'verified_average' => $aggregate->verified_average_rating ?? 0,
-                    'verified_percentage' => $aggregate->verified_percentage,
-                    'comments_count' => $aggregate->comments_count ?? 0,
-                    'comments_percentage' => $aggregate->comments_percentage,
+                    'verified_count' => (int) ($aggregate->verified_ratings_count ?? 0),
+                    'verified_average' => (float) ($aggregate->verified_average_rating ?? 0),
+                    'verified_percentage' => (float) $aggregate->verified_percentage,
+                    'comments_count' => (int) ($aggregate->comments_count ?? 0),
+                    'comments_percentage' => (float) $aggregate->comments_percentage,
                 ],
                 'sentiment_analysis' => [
                     'sentiment' => $aggregate->sentiment,
                     'rating_level' => $aggregate->rating_level,
-                    'positive_percentage' => ($aggregate->rating_distribution[4] ?? 0) + ($aggregate->rating_distribution[5] ?? 0) > 0
-                        ? round(((($aggregate->rating_distribution[4] ?? 0) + ($aggregate->rating_distribution[5] ?? 0)) / $aggregate->total_ratings) * 100, 1)
-                        : 0,
-                    'negative_percentage' => ($aggregate->rating_distribution[1] ?? 0) + ($aggregate->rating_distribution[2] ?? 0) > 0
-                        ? round(((($aggregate->rating_distribution[1] ?? 0) + ($aggregate->rating_distribution[2] ?? 0)) / $aggregate->total_ratings) * 100, 1)
-                        : 0,
+                    'positive_percentage' => (float) $aggregate->high_rating_percentage,
+                    'negative_percentage' => (float) $aggregate->low_rating_percentage,
+                    'neutral_percentage' => (float) $aggregate->medium_rating_percentage,
+                ],
+                'rating_breakdown' => [
+                    'high_ratings' => (float) $aggregate->high_rating_percentage,
+                    'medium_ratings' => (float) $aggregate->medium_rating_percentage,
+                    'low_ratings' => (float) $aggregate->low_rating_percentage,
+                    'positive_ratings' => (float) $aggregate->positive_rating_percentage,
+                    'negative_ratings' => (float) $aggregate->negative_rating_percentage,
+                    'neutral_ratings' => (float) $aggregate->neutral_rating_percentage,
                 ],
                 'recent_activity' => [
                     'last_rated_at' => $aggregate->last_rated_at,
@@ -512,9 +663,9 @@ class StoryRatingAggregate extends Model
             foreach ($ratings as $date => $dayRatings) {
                 $trends[$date] = [
                     'date' => $date,
-                    'count' => $dayRatings->count(),
+                    'count' => (int) $dayRatings->count(),
                     'average' => round($dayRatings->avg('rating'), 2),
-                    'total_sum' => $dayRatings->sum('rating'),
+                    'total_sum' => (int) $dayRatings->sum('rating'),
                 ];
             }
 
@@ -528,18 +679,18 @@ class StoryRatingAggregate extends Model
     public static function getGlobalStats(): array
     {
         return Cache::remember('global_rating_stats', self::CACHE_TTL_ANALYTICS, function (): array {
-            $totalStories = self::count();
-            $totalRatings = self::sum('total_ratings');
-            $averageGlobalRating = self::avg('average_rating');
+            $totalStories = (int) self::count();
+            $totalRatings = (int) self::sum('total_ratings');
+            $averageGlobalRating = (float) self::avg('average_rating');
 
             return [
                 'total_stories_rated' => $totalStories,
                 'total_ratings_given' => $totalRatings,
                 'global_average_rating' => round($averageGlobalRating ?? 0, 2),
-                'high_quality_stories' => self::reliable()->highRated()->count(),
-                'excellent_stories' => self::excellent()->count(),
-                'stories_with_comments' => self::where('comments_count', '>', 0)->count(),
-                'verified_ratings_total' => self::sum('verified_ratings_count'),
+                'high_quality_stories' => (int) self::reliable()->highRated()->count(),
+                'excellent_stories' => (int) self::excellent()->count(),
+                'stories_with_comments' => (int) self::where('comments_count', '>', 0)->count(),
+                'verified_ratings_total' => (int) self::sum('verified_ratings_count'),
             ];
         });
     }
@@ -570,7 +721,7 @@ class StoryRatingAggregate extends Model
             ->get()
             ->map(function ($rating) {
                 return [
-                    'rating' => $rating->rating,
+                    'rating' => (int) $rating->rating,
                     'comment' => $rating->comment,
                     'member_name' => $rating->member?->name ?? 'Anonymous',
                     'created_at' => $rating->created_at,
@@ -587,29 +738,38 @@ class StoryRatingAggregate extends Model
     {
         return [
             'basic_stats' => [
-                'average_rating' => 0,
+                'average_rating' => 0.0,
                 'total_ratings' => 0,
-                'quality_score' => 0,
-                'recommendation_rate' => 0,
+                'quality_score' => 0.0,
+                'recommendation_rate' => 0.0,
                 'is_reliable' => false,
                 'is_high_quality' => false,
             ],
             'distribution' => [
                 'counts' => array_fill_keys(self::VALID_RATINGS, 0),
-                'percentages' => array_fill_keys(self::VALID_RATINGS, 0),
+                'percentages' => array_fill_keys(self::VALID_RATINGS, 0.0),
             ],
             'quality_metrics' => [
                 'verified_count' => 0,
-                'verified_average' => 0,
-                'verified_percentage' => 0,
+                'verified_average' => 0.0,
+                'verified_percentage' => 0.0,
                 'comments_count' => 0,
-                'comments_percentage' => 0,
+                'comments_percentage' => 0.0,
             ],
             'sentiment_analysis' => [
                 'sentiment' => 'unrated',
                 'rating_level' => 'غير مقيم',
-                'positive_percentage' => 0,
-                'negative_percentage' => 0,
+                'positive_percentage' => 0.0,
+                'negative_percentage' => 0.0,
+                'neutral_percentage' => 0.0,
+            ],
+            'rating_breakdown' => [
+                'high_ratings' => 0.0,
+                'medium_ratings' => 0.0,
+                'low_ratings' => 0.0,
+                'positive_ratings' => 0.0,
+                'negative_ratings' => 0.0,
+                'neutral_ratings' => 0.0,
             ],
             'recent_activity' => [
                 'last_rated_at' => null,

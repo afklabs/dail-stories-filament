@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * StoryView Model for Daily Stories App with Filament Integration
- *
+ * 
  * Enhanced analytics and tracking system for story views with comprehensive
  * insights, performance metrics, and user behavior analysis.
  *
@@ -30,6 +30,41 @@ use Illuminate\Support\Facades\DB;
  * @property Carbon $viewed_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
+ * @property-read array $browser_info
+ * @property-read bool $is_mobile
+ * @property-read string $time_ago
+ * @property-read string $viewer_name
+ * @property-read string $viewer_type
+ * @property-read \App\Models\Member|null $member
+ * @property-read \App\Models\Story $story
+ * @method static Builder<static>|StoryView anonymous()
+ * @method static Builder<static>|StoryView byMember(int $memberId)
+ * @method static Builder<static>|StoryView byStory(int $storyId)
+ * @method static Builder<static>|StoryView desktop()
+ * @method static Builder<static>|StoryView guests()
+ * @method static Builder<static>|StoryView members()
+ * @method static Builder<static>|StoryView mobile()
+ * @method static Builder<static>|StoryView newModelQuery()
+ * @method static Builder<static>|StoryView newQuery()
+ * @method static Builder<static>|StoryView query()
+ * @method static Builder<static>|StoryView recent(int $days = 7)
+ * @method static Builder<static>|StoryView thisMonth()
+ * @method static Builder<static>|StoryView thisWeek()
+ * @method static Builder<static>|StoryView today()
+ * @method static Builder<static>|StoryView unique()
+ * @method static Builder<static>|StoryView whereCreatedAt($value)
+ * @method static Builder<static>|StoryView whereDeviceId($value)
+ * @method static Builder<static>|StoryView whereId($value)
+ * @method static Builder<static>|StoryView whereIpAddress($value)
+ * @method static Builder<static>|StoryView whereMemberId($value)
+ * @method static Builder<static>|StoryView whereMetadata($value)
+ * @method static Builder<static>|StoryView whereReferrer($value)
+ * @method static Builder<static>|StoryView whereSessionId($value)
+ * @method static Builder<static>|StoryView whereStoryId($value)
+ * @method static Builder<static>|StoryView whereUpdatedAt($value)
+ * @method static Builder<static>|StoryView whereUserAgent($value)
+ * @method static Builder<static>|StoryView whereViewedAt($value)
+ * @mixin \Eloquent
  */
 class StoryView extends Model
 {
@@ -181,7 +216,7 @@ class StoryView extends Model
         }
 
         if ($this->device_id) {
-            return 'Guest ('.substr($this->device_id, 0, 8).')';
+            return 'Guest (' . substr($this->device_id, 0, 8) . ')';
         }
 
         return 'Anonymous Viewer';
@@ -746,5 +781,19 @@ class StoryView extends Model
         $storyTitle = $this->story?->title ?? 'Unknown Story';
 
         return "{$storyTitle} - {$this->viewer_name} ({$this->time_ago})";
+    }
+
+
+    public static function today(): Builder
+    {
+        return static::query()->whereDate('viewed_at', today());
+    }
+
+    public static function thisWeek(): Builder
+    {
+        return static::query()->whereBetween('viewed_at', [
+            now()->startOfWeek(),
+            now()->endOfWeek(),
+        ]);
     }
 }

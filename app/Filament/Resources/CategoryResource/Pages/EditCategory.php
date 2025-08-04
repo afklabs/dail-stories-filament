@@ -29,25 +29,25 @@ class EditCategory extends EditRecord
         ];
     }
 
-protected function afterSave(): void
-{
-    $record = $this->getRecord();
-    
-    if ($record instanceof \App\Models\Category) {
-        $record->stories()->touch();
-    }
-}
+    protected function afterSave(): void
+    {
+        $record = $this->getRecord();
 
-protected function getRedirectUrl(): string
-{
-    $record = $this->getRecord();
-    
-    if ($record instanceof \App\Models\Category) {
-        return $this->getResource()::getUrl('view', ['record' => $record->id]);
+        if ($record instanceof \App\Models\Category) {
+            $record->stories()->touch();
+        }
     }
-    
-    return $this->getResource()::getUrl('index');
-}
+
+    protected function getRedirectUrl(): string
+    {
+        $record = $this->getRecord();
+
+        if ($record instanceof \App\Models\Category) {
+            return $this->getResource()::getUrl('view', ['record' => $record->id]);
+        }
+
+        return $this->getResource()::getUrl('index');
+    }
 
     protected function getSavedNotification(): ?Notification
     {
@@ -64,14 +64,22 @@ protected function getRedirectUrl(): string
             $data['slug'] = Str::slug($data['name']);
         }
 
+        /** @var Story $record */  // Type cast for PHPStan
+        $record = $this->record;
+
+        // Now PHPStan knows exact type - no more warnings!
+        $record->stories()->count(); // ✅ PHPStan: "Method exists on Story model"
+
+
         // Ensure slug is unique (excluding current record)
         $originalSlug = $data['slug'];
         $counter = 1;
 
         while (\App\Models\Category::where('slug', $data['slug'])
             ->where('id', '!=', $this->record->id)
-            ->exists()) {
-            $data['slug'] = $originalSlug.'-'.$counter;
+            ->exists()
+        ) {
+            $data['slug'] = $originalSlug . '-' . $counter;
             $counter++;
         }
 

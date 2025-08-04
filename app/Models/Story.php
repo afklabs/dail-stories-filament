@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Log;
  * @property string $title
  * @property string $content
  * @property string|null $excerpt
+ * @property string $slug
  * @property int $category_id
  * @property int $views
  * @property int $reading_time_minutes
@@ -31,10 +32,13 @@ use Illuminate\Support\Facades\Log;
  * @property bool $is_featured
  * @property Carbon|null $active_from
  * @property Carbon|null $active_until
+ * @property Carbon|null $published_at
  * @property string|null $image
+ * @property int $previous_views
+ * @property int $recent_views
  * @property Carbon $created_at
  * @property Carbon $updated_at
- * 
+ * @property-read string $status
  * @property-read Category|null $category
  * @property-read \Illuminate\Database\Eloquent\Collection|Tag[] $tags
  * @property-read \Illuminate\Database\Eloquent\Collection|StoryView[] $storyViews
@@ -43,6 +47,54 @@ use Illuminate\Support\Facades\Log;
  * @property-read StoryRatingAggregate|null $ratingAggregate
  * @property-read \Illuminate\Database\Eloquent\Collection|MemberReadingHistory[] $readingHistory
  * @property-read \Illuminate\Database\Eloquent\Collection|StoryPublishingHistory[] $publishingHistory
+ * @property string|null $author Story author name (المؤلف)
+ * @property-read float $average_rating
+ * @property-read int $calculated_reading_time_minutes
+ * @property-read string $display_excerpt
+ * @property-read string $formatted_reading_time
+ * @property-read string $formatted_remaining_time
+ * @property-read string $formatted_total_ratings
+ * @property-read string $formatted_views
+ * @property-read bool $has_expired
+ * @property-read string|null $image_url
+ * @property-read bool $is_expired
+ * @property-read array|null $remaining_time
+ * @property-read int $total_ratings
+ * @property-read int|null $interactions_count
+ * @property-read int|null $publishing_history_count
+ * @property-read int|null $ratings_count
+ * @property-read int|null $reading_history_count
+ * @property-read int|null $story_views_count
+ * @property-read int|null $tags_count
+ * @method static Builder<static>|Story active()
+ * @method static Builder<static>|Story expired()
+ * @method static Builder<static>|Story expiringSoon(int $hours = 24)
+ * @method static Builder<static>|Story featured()
+ * @method static Builder<static>|Story highRated(float $minRating = 4)
+ * @method static Builder<static>|Story inCategory(int $categoryId)
+ * @method static Builder<static>|Story newModelQuery()
+ * @method static Builder<static>|Story newQuery()
+ * @method static Builder<static>|Story popular(int $minViews = 100)
+ * @method static Builder<static>|Story published()
+ * @method static Builder<static>|Story query()
+ * @method static Builder<static>|Story recent(int $days = 7)
+ * @method static Builder<static>|Story scheduled()
+ * @method static Builder<static>|Story whereActive($value)
+ * @method static Builder<static>|Story whereActiveFrom($value)
+ * @method static Builder<static>|Story whereActiveUntil($value)
+ * @method static Builder<static>|Story whereAuthor($value)
+ * @method static Builder<static>|Story whereCategoryId($value)
+ * @method static Builder<static>|Story whereContent($value)
+ * @method static Builder<static>|Story whereCreatedAt($value)
+ * @method static Builder<static>|Story whereExcerpt($value)
+ * @method static Builder<static>|Story whereId($value)
+ * @method static Builder<static>|Story whereImage($value)
+ * @method static Builder<static>|Story whereReadingTimeMinutes($value)
+ * @method static Builder<static>|Story whereTitle($value)
+ * @method static Builder<static>|Story whereUpdatedAt($value)
+ * @method static Builder<static>|Story whereViews($value)
+ * @method static Builder<static>|Story withTag(int $tagId)
+ * @mixin \Eloquent
  */
 class Story extends Model
 {
@@ -77,13 +129,12 @@ class Story extends Model
 
     /**
      * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
      */
     protected $fillable = [
         'title',
         'content',
         'excerpt',
+        'slug',
         'category_id',
         'views',
         'reading_time_minutes',
@@ -91,34 +142,34 @@ class Story extends Model
         'is_featured',
         'active_from',
         'active_until',
+        'published_at',
         'image',
+        'previous_views',
+        'recent_views',
     ];
 
     /**
      * The attributes that should be cast.
-     *
-     * @var array<string, string>
      */
     protected $casts = [
         'active' => 'boolean',
         'is_featured' => 'boolean',
         'active_from' => 'datetime',
         'active_until' => 'datetime',
+        'published_at' => 'datetime',
         'views' => 'integer',
         'reading_time_minutes' => 'integer',
+        'previous_views' => 'integer',
+        'recent_views' => 'integer',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
      */
     protected $hidden = [];
 
     /**
      * The attributes that should be appended to arrays.
-     *
-     * @var array<int, string>
      */
     protected $appends = [
         'image_url',
@@ -139,8 +190,13 @@ class Story extends Model
     {
         parent::boot();
 
-        // Auto-generate excerpt and reading time before saving
+        // Auto-generate excerpt, slug, and reading time before saving
         static::saving(function (self $story): void {
+            // Generate slug if not provided
+            if (empty($story->slug)) {
+                $story->slug = Str::slug($story->title);
+            }
+
             // Generate excerpt if not provided
             if (empty($story->excerpt)) {
                 $story->excerpt = $story->generateExcerpt();
@@ -153,6 +209,11 @@ class Story extends Model
 
             // Validate excerpt length
             $story->excerpt = Str::limit($story->excerpt, self::MAX_EXCERPT_LENGTH);
+
+            // Set published_at when story becomes active
+            if ($story->active && !$story->published_at) {
+                $story->published_at = $story->active_from ?? now();
+            }
         });
 
         // Clear enhanced cache when story is updated
@@ -328,6 +389,7 @@ class Story extends Model
 
         $this->attributes['excerpt'] = $cleanValue;
     }
+
     /**
      * Get story status based on active state and dates
      */
@@ -339,15 +401,39 @@ class Story extends Model
 
         $now = now();
 
-        if ($this->active_from && $this->active_from > $now) {
+        if ($this->active_from && $this->active_from->isFuture()) {
             return 'scheduled';
         }
 
-        if ($this->active_until && $this->active_until < $now) {
+        if ($this->active_until && $this->active_until->isPast()) {
             return 'expired';
         }
 
         return 'published';
+    }
+
+    /**
+     * Get or generate slug
+     */
+    public function getSlugAttribute(): string
+    {
+        return $this->attributes['slug'] ?? Str::slug($this->title);
+    }
+
+    /**
+     * Get previous views count
+     */
+    public function getPreviousViewsAttribute(): int
+    {
+        return $this->attributes['previous_views'] ?? 0;
+    }
+
+    /**
+     * Get recent views count
+     */
+    public function getRecentViewsAttribute(): int
+    {
+        return $this->attributes['recent_views'] ?? $this->views;
     }
 
     /**
@@ -411,7 +497,7 @@ class Story extends Model
     }
 
     /**
-     * Get average rating (cached) - FIXED: Now returns float
+     * Get average rating (cached) - Returns float
      */
     public function getAverageRatingAttribute(): float
     {
@@ -518,6 +604,17 @@ class Story extends Model
         return $query->where('active', true)
             ->whereNotNull('active_until')
             ->where('active_until', '<=', now());
+    }
+
+    /**
+     * Scope for stories expiring soon
+     */
+    public function scopeExpiringSoon(Builder $query, int $hours = 24): Builder
+    {
+        return $query->where('active', true)
+            ->whereNotNull('active_until')
+            ->where('active_until', '<=', now()->addHours($hours))
+            ->where('active_until', '>', now());
     }
 
     /**
@@ -636,8 +733,15 @@ class Story extends Model
                 'viewed_at' => now(),
             ]);
 
+            // Store previous views before incrementing
+            $this->previous_views = $this->views;
+
             // Increment view counter
             $this->increment('views');
+
+            // Update recent views
+            $this->recent_views = $this->views;
+            $this->save();
 
             // Clear view-related caches
             Cache::forget("story.{$this->id}.stats");
@@ -719,6 +823,7 @@ class Story extends Model
             $data = [
                 'id' => $this->id,
                 'title' => $this->title,
+                'slug' => $this->slug,
                 'excerpt' => $this->excerpt,
                 'content' => $this->content,
                 'image_url' => $this->image_url,
@@ -729,12 +834,15 @@ class Story extends Model
                     'name' => $tag->name,
                 ]),
                 'views' => $this->views,
+                'previous_views' => $this->previous_views,
+                'recent_views' => $this->recent_views,
                 'reading_time_minutes' => $this->reading_time_minutes,
                 'is_featured' => $this->is_featured,
                 'is_published' => $this->active,
+                'status' => $this->status,
                 'active_from' => $this->active_from?->toIso8601String(),
                 'active_until' => $this->active_until?->toIso8601String(),
-                'published_at' => $this->active_from?->toIso8601String(),
+                'published_at' => $this->published_at?->toIso8601String(),
                 'created_at' => $this->created_at->toIso8601String(),
                 'updated_at' => $this->updated_at->toIso8601String(),
             ];
@@ -826,6 +934,8 @@ class Story extends Model
             return [
                 'basic_stats' => [
                     'total_views' => $this->views,
+                    'previous_views' => $this->previous_views,
+                    'recent_views' => $this->recent_views,
                     'unique_views' => $this->storyViews()->distinct('device_id')->count(),
                     'member_views' => $this->storyViews()->whereNotNull('member_id')->count(),
                     'average_rating' => $this->average_rating,

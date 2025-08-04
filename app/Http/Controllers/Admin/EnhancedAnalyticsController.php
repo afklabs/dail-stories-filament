@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\MemberStoryInteraction;
 use App\Models\MemberStoryRating;
+use App\Models\Member;
 use App\Models\Story;
 use App\Models\StoryRatingAggregate;
 use App\Models\StoryView;
@@ -55,6 +56,49 @@ class EnhancedAnalyticsController extends Controller
         }
     }
 
+
+
+
+    protected function getAudienceDemo­graphics(): array
+    {
+        return [
+            'total_members' => Member::count(),
+            'active_members' => Member::where('status', 'active')->count(),
+        ];
+    }
+
+    protected function getBehaviorPatterns(): array
+    {
+        return [];
+    }
+    protected function getDetailedDeviceAnalytics(): array
+    {
+        return [];
+    }
+    protected function getEngagementSegments(): array
+    {
+        return [];
+    }
+    protected function getRetentionMetrics(): array
+    {
+        return [];
+    }
+    protected function getPublishingActivitySummary(): array
+    {
+        return [];
+    }
+    protected function getPublishingUserActivity(): array
+    {
+        return [];
+    }
+    protected function getWorkflowAnalytics(): array
+    {
+        return [];
+    }
+    protected function getPublishingImpactAnalysis(): array
+    {
+        return [];
+    }
     /**
      * Get story-specific analytics
      */

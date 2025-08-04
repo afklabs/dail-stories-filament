@@ -16,6 +16,92 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $email
+ * @property \Illuminate\Support\Carbon|null $email_verified_at
+ * @property string $password
+ * @property string|null $password_changed_at
+ * @property string|null $account_locked_at
+ * @property int $failed_login_attempts
+ * @property string|null $phone
+ * @property string|null $avatar
+ * @property \Illuminate\Support\Carbon|null $date_of_birth
+ * @property string|null $gender
+ * @property string $status
+ * @property string|null $device_id
+ * @property \Illuminate\Support\Carbon|null $last_login_at
+ * @property int $login_count
+ * @property string|null $last_login_ip
+ * @property string|null $registration_ip
+ * @property string|null $user_agent
+ * @property string|null $remember_token
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read mixed $age
+ * @property-read string $avatar_url
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Story> $bookmarkedStories
+ * @property-read int|null $bookmarked_stories_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Story> $dislikedStories
+ * @property-read int|null $disliked_stories_count
+ * @property-read bool $has_custom_avatar
+ * @property-read string $initials
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\MemberStoryInteraction> $interactions
+ * @property-read int|null $interactions_count
+ * @property-read mixed $is_active
+ * @property-read \Illuminate\Notifications\DatabaseNotificationCollection<int, \Illuminate\Notifications\DatabaseNotification> $notifications
+ * @property-read int|null $notifications_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\MemberReadingHistory> $readingHistory
+ * @property-read int|null $reading_history_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\MemberStoryInteraction> $storyInteractions
+ * @property-read int|null $story_interactions_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\MemberStoryRating> $storyRatings
+ * @property-read int|null $story_ratings_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\StoryView> $storyViews
+ * @property-read int|null $story_views_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \Laravel\Sanctum\PersonalAccessToken> $tokens
+ * @property-read int|null $tokens_count
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Story> $viewedStories
+ * @property-read int|null $viewed_stories_count
+ * @method static Builder<static>|Member active()
+ * @method static Builder<static>|Member adults()
+ * @method static Builder<static>|Member byDevice(?string $deviceId)
+ * @method static Builder<static>|Member byGender(string $gender)
+ * @method static Builder<static>|Member inactive()
+ * @method static Builder<static>|Member newModelQuery()
+ * @method static Builder<static>|Member newQuery()
+ * @method static Builder<static>|Member query()
+ * @method static Builder<static>|Member recentlyActive(int $days = 30)
+ * @method static Builder<static>|Member suspended()
+ * @method static Builder<static>|Member unverified()
+ * @method static Builder<static>|Member verified()
+ * @method static Builder<static>|Member whereAccountLockedAt($value)
+ * @method static Builder<static>|Member whereAvatar($value)
+ * @method static Builder<static>|Member whereCreatedAt($value)
+ * @method static Builder<static>|Member whereDateOfBirth($value)
+ * @method static Builder<static>|Member whereDeviceId($value)
+ * @method static Builder<static>|Member whereEmail($value)
+ * @method static Builder<static>|Member whereEmailVerifiedAt($value)
+ * @method static Builder<static>|Member whereFailedLoginAttempts($value)
+ * @method static Builder<static>|Member whereGender($value)
+ * @method static Builder<static>|Member whereId($value)
+ * @method static Builder<static>|Member whereLastLoginAt($value)
+ * @method static Builder<static>|Member whereLastLoginIp($value)
+ * @method static Builder<static>|Member whereLoginCount($value)
+ * @method static Builder<static>|Member whereName($value)
+ * @method static Builder<static>|Member wherePassword($value)
+ * @method static Builder<static>|Member wherePasswordChangedAt($value)
+ * @method static Builder<static>|Member wherePhone($value)
+ * @method static Builder<static>|Member whereRegistrationIp($value)
+ * @method static Builder<static>|Member whereRememberToken($value)
+ * @method static Builder<static>|Member whereStatus($value)
+ * @method static Builder<static>|Member whereUpdatedAt($value)
+ * @method static Builder<static>|Member whereUserAgent($value)
+ * @method static Builder<static>|Member withCustomAvatar()
+ * @method static Builder<static>|Member withoutCustomAvatar()
+ * @mixin \Eloquent
+ */
 class Member extends Authenticatable implements FilamentUser
 {
     use HasApiTokens, HasFactory, Notifiable;
@@ -379,6 +465,18 @@ class Member extends Authenticatable implements FilamentUser
             ->where('action', $action)
             ->exists();
     }
+
+
+    public static function thisWeek(): Builder
+    {
+        return static::query()->whereBetween('created_at', [
+            now()->startOfWeek(),
+            now()->endOfWeek(),
+        ]);
+    }
+
+
+
 
     // ✅ IMPROVED: Better error handling and return type
     public function interactWith(Story $story, string $action): ?MemberStoryInteraction

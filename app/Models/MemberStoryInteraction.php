@@ -24,9 +24,41 @@ use Carbon\Carbon;
  * @property array|null $metadata
  * @property Carbon $created_at
  * @property Carbon $updated_at
- *
  * @property-read Member $member
  * @property-read Story $story
+ * @property int $interaction_count
+ * @property string|null $last_interacted_at
+ * @property-read string $action_color
+ * @property-read string $action_icon
+ * @property-read string $action_label
+ * @property-read bool $is_negative
+ * @property-read bool $is_neutral
+ * @property-read bool $is_positive
+ * @property-read string|null $metadata_value
+ * @method static Builder<static>|MemberStoryInteraction byAction(string $action)
+ * @method static Builder<static>|MemberStoryInteraction byActions(array $actions)
+ * @method static Builder<static>|MemberStoryInteraction byMember(int $memberId)
+ * @method static Builder<static>|MemberStoryInteraction byStory(int $storyId)
+ * @method static Builder<static>|MemberStoryInteraction negative()
+ * @method static Builder<static>|MemberStoryInteraction neutral()
+ * @method static Builder<static>|MemberStoryInteraction newModelQuery()
+ * @method static Builder<static>|MemberStoryInteraction newQuery()
+ * @method static Builder<static>|MemberStoryInteraction positive()
+ * @method static Builder<static>|MemberStoryInteraction query()
+ * @method static Builder<static>|MemberStoryInteraction recent(int $days = 7)
+ * @method static Builder<static>|MemberStoryInteraction thisMonth()
+ * @method static Builder<static>|MemberStoryInteraction thisWeek()
+ * @method static Builder<static>|MemberStoryInteraction today()
+ * @method static Builder<static>|MemberStoryInteraction whereAction($value)
+ * @method static Builder<static>|MemberStoryInteraction whereCreatedAt($value)
+ * @method static Builder<static>|MemberStoryInteraction whereId($value)
+ * @method static Builder<static>|MemberStoryInteraction whereInteractionCount($value)
+ * @method static Builder<static>|MemberStoryInteraction whereLastInteractedAt($value)
+ * @method static Builder<static>|MemberStoryInteraction whereMemberId($value)
+ * @method static Builder<static>|MemberStoryInteraction whereMetadata($value)
+ * @method static Builder<static>|MemberStoryInteraction whereStoryId($value)
+ * @method static Builder<static>|MemberStoryInteraction whereUpdatedAt($value)
+ * @mixin \Eloquent
  */
 class MemberStoryInteraction extends Model
 {
@@ -651,5 +683,19 @@ class MemberStoryInteraction extends Model
                     ->toArray(),
             ];
         });
+    }
+
+
+    public static function today(): Builder
+    {
+        return static::query()->whereDate('created_at', today());
+    }
+
+    public static function thisWeek(): Builder
+    {
+        return static::query()->whereBetween('created_at', [
+            now()->startOfWeek(),
+            now()->endOfWeek(),
+        ]);
     }
 }

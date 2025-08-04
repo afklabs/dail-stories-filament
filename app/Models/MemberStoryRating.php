@@ -26,10 +26,40 @@ use Carbon\Carbon;
  * @property int $helpful_count
  * @property Carbon $created_at
  * @property Carbon $updated_at
- *
  * @property-read Member $member
  * @property-read Story $story
  * @property-read StoryRatingAggregate $aggregate
+ * @property string|null $metadata
+ * @property-read string|null $comment_excerpt
+ * @property-read bool $has_comment
+ * @property-read bool $is_high_rating
+ * @property-read bool $is_low_rating
+ * @property-read string $rating_color
+ * @property-read string $rating_label
+ * @property-read string $stars_display
+ * @method static Builder<static>|MemberStoryRating byMember(int $memberId)
+ * @method static Builder<static>|MemberStoryRating byRating(int $rating)
+ * @method static Builder<static>|MemberStoryRating byStory(int $storyId)
+ * @method static Builder<static>|MemberStoryRating highRatings()
+ * @method static Builder<static>|MemberStoryRating lowRatings()
+ * @method static Builder<static>|MemberStoryRating newModelQuery()
+ * @method static Builder<static>|MemberStoryRating newQuery()
+ * @method static Builder<static>|MemberStoryRating popular(int $minHelpfulCount = 5)
+ * @method static Builder<static>|MemberStoryRating query()
+ * @method static Builder<static>|MemberStoryRating recent(int $days = 7)
+ * @method static Builder<static>|MemberStoryRating unverified()
+ * @method static Builder<static>|MemberStoryRating verified()
+ * @method static Builder<static>|MemberStoryRating whereComment($value)
+ * @method static Builder<static>|MemberStoryRating whereCreatedAt($value)
+ * @method static Builder<static>|MemberStoryRating whereId($value)
+ * @method static Builder<static>|MemberStoryRating whereIsVerified($value)
+ * @method static Builder<static>|MemberStoryRating whereMemberId($value)
+ * @method static Builder<static>|MemberStoryRating whereMetadata($value)
+ * @method static Builder<static>|MemberStoryRating whereRating($value)
+ * @method static Builder<static>|MemberStoryRating whereStoryId($value)
+ * @method static Builder<static>|MemberStoryRating whereUpdatedAt($value)
+ * @method static Builder<static>|MemberStoryRating withComments()
+ * @mixin \Eloquent
  */
 class MemberStoryRating extends Model
 {
@@ -610,5 +640,15 @@ class MemberStoryRating extends Model
 
             return 0;
         }
+    }
+
+
+
+    public static function thisWeek(): Builder
+    {
+        return static::query()->whereBetween('created_at', [
+            now()->startOfWeek(),
+            now()->endOfWeek(),
+        ]);
     }
 }

@@ -3,6 +3,9 @@
 namespace App\Filament\Resources\StoryResource\Pages;
 
 use App\Filament\Resources\StoryResource;
+use App\Models\Story;
+use App\Models\StoryPublishingHistory;
+use Carbon\Carbon;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
@@ -38,7 +41,7 @@ class EditStory extends EditRecord
         if (empty($data['excerpt']) && ! empty($data['content'])) {
             $plainText = strip_tags($data['content']);
             $plainText = preg_replace('/\s+/', ' ', $plainText);
-            $data['excerpt'] = substr(trim($plainText), 0, 160).'...';
+            $data['excerpt'] = substr(trim($plainText), 0, 160) . '...';
         }
 
         // Auto-calculate reading time
@@ -52,20 +55,32 @@ class EditStory extends EditRecord
 
     protected function afterSave(): void
     {
-        // Log the update in publishing history
+        // ✅ FIXED: Add type assertion for PHPStan
+        /** @var Story $story */
         $story = $this->record;
-        $originalData = $this->record->getOriginal();
+
+        // ✅ FIXED: Add type validation
+        if (!$story instanceof Story) {
+            return;
+        }
+
+        $originalData = $story->getOriginal();
 
         $changedFields = [];
 
+        // ✅ FIXED: Safe property access with null coalescing
+        $originalActive = $originalData['active'] ?? false;
+        $originalActiveFrom = $originalData['active_from'] ?? null;
+        $originalActiveUntil = $originalData['active_until'] ?? null;
+
         // Check what publishing-related fields changed
-        if ($originalData['active'] !== $story->active) {
+        if ($originalActive !== $story->active) {
             $changedFields[] = 'active';
         }
-        if ($originalData['active_from'] !== $story->active_from?->toDateTimeString()) {
+        if ($originalActiveFrom !== $story->active_from?->toDateTimeString()) {
             $changedFields[] = 'active_from';
         }
-        if ($originalData['active_until'] !== $story->active_until?->toDateTimeString()) {
+        if ($originalActiveUntil !== $story->active_until?->toDateTimeString()) {
             $changedFields[] = 'active_until';
         }
 
@@ -74,22 +89,22 @@ class EditStory extends EditRecord
             $action = 'updated';
 
             // Determine specific action
-            if (! $originalData['active'] && $story->active) {
+            if (! $originalActive && $story->active) {
                 $action = 'published';
-            } elseif ($originalData['active'] && ! $story->active) {
+            } elseif ($originalActive && ! $story->active) {
                 $action = 'unpublished';
-            } elseif ($originalData['active'] && $story->active) {
+            } elseif ($originalActive && $story->active) {
                 $action = 'republished';
             }
 
-            \App\Models\StoryPublishingHistory::create([
+            StoryPublishingHistory::create([
                 'story_id' => $story->id,
                 'user_id' => auth()->id(),
                 'action' => $action,
-                'previous_active_status' => $originalData['active'],
+                'previous_active_status' => $originalActive,
                 'new_active_status' => $story->active,
-                'previous_active_from' => $originalData['active_from'] ? new \Carbon\Carbon($originalData['active_from']) : null,
-                'previous_active_until' => $originalData['active_until'] ? new \Carbon\Carbon($originalData['active_until']) : null,
+                'previous_active_from' => $originalActiveFrom ? new Carbon($originalActiveFrom) : null,
+                'previous_active_until' => $originalActiveUntil ? new Carbon($originalActiveUntil) : null,
                 'new_active_from' => $story->active_from,
                 'new_active_until' => $story->active_until,
                 'changed_fields' => $changedFields,

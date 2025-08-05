@@ -29,57 +29,7 @@ class ViewStory extends ViewRecord
                 ->modalDescription('Are you sure you want to delete this story? This action cannot be undone.')
                 ->modalSubmitActionLabel('Yes, delete story'),
 
-            Actions\Action::make('publish')
-                ->label(fn() => $this->record->status === 'published' ? 'Unpublish' : 'Publish')
-                ->icon(fn() => $this->record->status === 'published' ? 'heroicon-o-eye-slash' : 'heroicon-o-eye')
-                ->color(fn() => $this->record->status === 'published' ? 'warning' : 'success')
-                ->action(function () {
-                    $newStatus = $this->record->status === 'published' ? 'draft' : 'published';
-                    $this->record->update(['status' => $newStatus]);
 
-                    \Filament\Notifications\Notification::make()
-                        ->success()
-                        ->title('Story ' . ($newStatus === 'published' ? 'published' : 'unpublished'))
-                        ->body('The story status has been updated successfully.')
-                        ->send();
-
-                    $this->refreshFormData(['status']);
-                })
-                ->requiresConfirmation(fn() => $this->record->status === 'published')
-                ->modalHeading(fn() => $this->record->status === 'published' ? 'Unpublish Story' : 'Publish Story')
-                ->modalDescription(fn() => $this->record->status === 'published'
-                    ? 'Are you sure you want to unpublish this story?'
-                    : 'Are you sure you want to publish this story?'),
-
-            Actions\Action::make('duplicate')
-                ->label('Duplicate Story')
-                ->icon('heroicon-o-document-duplicate')
-                ->color('gray')
-                ->action(function () {
-                    $newStory = $this->record->replicate();
-                    $newStory->title = $this->record->title . ' (Copy)';
-                    $newStory->slug = $this->record->slug . '-copy';
-                    $newStory->status = 'draft';
-                    $newStory->views = 0;
-                    $newStory->published_at = null;
-                    $newStory->save();
-
-                    // Copy relationships if needed
-                    if ($this->record->tags) {
-                        $newStory->tags()->sync($this->record->tags->pluck('id'));
-                    }
-
-                    \Filament\Notifications\Notification::make()
-                        ->success()
-                        ->title('Story duplicated')
-                        ->body('A copy of this story has been created as a draft.')
-                        ->actions([
-                            \Filament\Notifications\Actions\Action::make('view')
-                                ->label('View Copy')
-                                ->url(StoryResource::getUrl('edit', ['record' => $newStory]))
-                        ])
-                        ->send();
-                }),
 
             Actions\Action::make('view_analytics')
                 ->label('View Analytics')
@@ -93,13 +43,11 @@ class ViewStory extends ViewRecord
                         ->send();
                 })
                 ->visible(function () {
-                    // Use Gate facade for permission checking - always recognized by static analysis
                     try {
-                        return \Illuminate\Support\Facades\Gate::allows('view_analytics') ||
-                            (auth()->check() && auth()->user()->hasPermissionTo('view_analytics'));
+                        return Gate::allows('view_analytics') ||
+                            (auth()->check() && auth()->user()?->hasPermissionTo('view_analytics'));
                     } catch (\Exception $e) {
-                        // Fallback: allow if user is admin
-                        return auth()->check() && (auth()->user()->is_admin ?? false);
+                        return auth()->check() && (auth()->user()?->is_admin ?? false);
                     }
                 }),
 
@@ -108,10 +56,13 @@ class ViewStory extends ViewRecord
                     ->label('Copy Link')
                     ->icon('heroicon-o-link')
                     ->action(function () {
+                        /** @var Story $record */
+                        $record = $this->record;
+
                         \Filament\Notifications\Notification::make()
                             ->success()
                             ->title('Link ready')
-                            ->body('Story link: /stories/' . $this->record->slug)
+                            ->body('Story link: /stories/' . ($record->slug ?? $record->id))
                             ->send();
                     }),
 
@@ -194,9 +145,10 @@ class ViewStory extends ViewRecord
                     ->schema([
                         Infolists\Components\Grid::make(3)
                             ->schema([
-                                Infolists\Components\TextEntry::make('published_at')
+                                Infolists\Components\TextEntry::make('active_from')
+                                    ->label('Active From')
                                     ->dateTime()
-                                    ->placeholder('Not published'),
+                                    ->placeholder('Not scheduled'),
 
                                 Infolists\Components\TextEntry::make('reading_time_minutes')
                                     ->formatStateUsing(fn($state) => ($state ?? 0) . ' minutes')

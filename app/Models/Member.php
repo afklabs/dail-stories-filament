@@ -618,11 +618,11 @@ class Member extends Authenticatable implements FilamentUser
     /**
      * ✅ FIXED: Missing getPreferredCategories() method
      */
-    public function getPreferredCategories(): Collection
+    public function getPreferredCategories(int $limit = 5): Collection
     {
-        $cacheKey = "member_{$this->id}_preferred_categories";
+        $cacheKey = "member_{$this->id}_preferred_categories_{$limit}";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function (): Collection {
+        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function () use ($limit): Collection {
             return $this->interactions()
                 ->join('stories', 'member_story_interactions.story_id', '=', 'stories.id')
                 ->join('categories', 'stories.category_id', '=', 'categories.id')
@@ -630,11 +630,12 @@ class Member extends Authenticatable implements FilamentUser
                 ->groupBy('categories.id', 'categories.name')
                 ->selectRaw('categories.id, categories.name, COUNT(*) as interaction_count')
                 ->orderByDesc('interaction_count')
-                ->limit(5)
+                ->limit($limit) // ✅ استخدم الـ parameter
                 ->get()
                 ->pluck('name', 'id');
         });
     }
+
 
     /**
      * ✅ FIXED: Missing getReadingConsistencyScore() method

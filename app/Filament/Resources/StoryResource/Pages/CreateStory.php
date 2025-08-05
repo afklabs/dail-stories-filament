@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\StoryResource\Pages;
 
 use App\Filament\Resources\StoryResource;
+use App\Models\Story;
 use App\Models\StoryPublishingHistory;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
@@ -30,7 +31,7 @@ class CreateStory extends CreateRecord
         if (empty($data['excerpt']) && ! empty($data['content'])) {
             $plainText = strip_tags($data['content']);
             $plainText = preg_replace('/\s+/', ' ', $plainText);
-            $data['excerpt'] = substr(trim($plainText), 0, 160).'...';
+            $data['excerpt'] = substr(trim($plainText), 0, 160) . '...';
         }
 
         // Auto-calculate reading time
@@ -49,8 +50,14 @@ class CreateStory extends CreateRecord
 
     protected function afterCreate(): void
     {
-        // Log the creation in publishing history
+        // ✅ FIXED: Add type assertion for PHPStan
+        /** @var Story $story */
         $story = $this->record;
+
+        // ✅ FIXED: Add null check and type validation
+        if (!$story instanceof Story) {
+            return;
+        }
 
         if ($story->active) {
             StoryPublishingHistory::create([

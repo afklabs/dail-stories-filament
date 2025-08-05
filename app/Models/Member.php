@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Collection;
+use App\Models\MemberStoryInteraction;
+use App\Models\MemberReadingHistory;
+
 
 /**
  * @property int $id
@@ -106,6 +111,16 @@ class Member extends Authenticatable implements FilamentUser
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    /*
+    |--------------------------------------------------------------------------
+    | CONSTANTS
+    |--------------------------------------------------------------------------
+    */
+
+    private const CACHE_TTL_SHORT = 300; // 5 minutes
+    private const CACHE_TTL_MEDIUM = 900; // 15 minutes
+    private const CACHE_TTL_LONG = 3600; // 1 hour
+
     // ✅ IMPROVED: Better organized fillable fields with security considerations
     protected $fillable = [
         'name',
@@ -132,6 +147,101 @@ class Member extends Authenticatable implements FilamentUser
         'female' => 'default-avatars/female-avatar.png',
         'default' => 'default-avatars/default-avatar.png',
     ];
+
+    // ✅ IMPROVED: Added more security-sensitive fields
+    protected $hidden = [
+        'password',
+        'remember_token',
+        'device_id', // Security: Hide device tracking
+    ];
+
+    // ✅ IMPROVED: Better casting with enum support
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'date_of_birth' => 'date',
+        'last_login_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONSHIPS - ✅ IMPROVED with better type hints and optimization
+    |--------------------------------------------------------------------------
+    */
+
+    public function storyViews(): HasMany
+    {
+        return $this->hasMany(StoryView::class);
+    }
+
+    public function interactions(): HasMany
+    {
+        return $this->hasMany(MemberStoryInteraction::class);
+    }
+
+    public function readingHistory(): HasMany
+    {
+        return $this->hasMany(MemberReadingHistory::class);
+    }
+
+    public function storyInteractions(): HasMany
+    {
+        return $this->hasMany(MemberStoryInteraction::class);
+    }
+
+    public function storyRatings(): HasMany
+    {
+        return $this->hasMany(MemberStoryRating::class);
+    }
+
+    /**
+     * ✅ FIXED: Missing ratings() method that PHPStan couldn't find
+     */
+    public function ratings(): HasMany
+    {
+        return $this->hasMany(MemberStoryRating::class, 'member_id');
+    }
+
+    // ✅ IMPROVED: More efficient relationship queries with proper pivot selection
+    public function likedStories(): BelongsToMany
+    {
+        return $this->belongsToMany(Story::class, 'member_story_interactions')
+            ->wherePivot('action', 'like')
+            ->withPivot(['created_at', 'updated_at'])
+            ->withTimestamps();
+    }
+
+    public function dislikedStories(): BelongsToMany
+    {
+        return $this->belongsToMany(Story::class, 'member_story_interactions')
+            ->wherePivot('action', 'dislike')
+            ->withPivot(['created_at', 'updated_at'])
+            ->withTimestamps();
+    }
+
+    public function bookmarkedStories(): BelongsToMany
+    {
+        return $this->belongsToMany(Story::class, 'member_story_interactions')
+            ->wherePivot('action', 'bookmark')
+            ->withPivot(['created_at', 'updated_at'])
+            ->withTimestamps();
+    }
+
+    public function viewedStories(): BelongsToMany
+    {
+        return $this->belongsToMany(Story::class, 'member_story_interactions')
+            ->wherePivot('action', 'view')
+            ->withPivot(['created_at', 'updated_at'])
+            ->withTimestamps();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACCESSORS & MUTATORS - ✅ IMPROVED with Laravel 9+ syntax and better logic
+    |--------------------------------------------------------------------------
+    */
 
     // ✅ ENHANCED: Replace your existing getAvatarUrlAttribute with this enhanced version
     public function getAvatarUrlAttribute(): string
@@ -225,102 +335,6 @@ class Member extends Authenticatable implements FilamentUser
         // Implement your role checking logic here
         return false; // or use Spatie Permission trait
     }
-
-    // ✅ IMPROVED: Added more security-sensitive fields
-    protected $hidden = [
-        'password',
-        'remember_token',
-        'device_id', // Security: Hide device tracking
-    ];
-
-    // ✅ IMPROVED: Better casting with enum support
-    protected $casts = [
-        'email_verified_at' => 'datetime',
-        'date_of_birth' => 'date',
-        'last_login_at' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
-    ];
-
-    // ✅ NEW: Filament panel access (if members need admin access)
-    public function canAccessPanel(Panel $panel): bool
-    {
-        // Only allow verified, active members with admin role
-        return $this->status === 'active' &&
-            $this->email_verified_at !== null &&
-            $this->hasRole('member_admin'); // If using Spatie Permission
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONSHIPS - ✅ IMPROVED with better type hints and optimization
-    |--------------------------------------------------------------------------
-    */
-
-    public function storyViews(): HasMany
-    {
-        return $this->hasMany(StoryView::class);
-    }
-
-    public function interactions(): HasMany
-    {
-        return $this->hasMany(MemberStoryInteraction::class);
-    }
-
-    public function readingHistory()
-    {
-        return $this->hasMany(MemberReadingHistory::class);
-    }
-
-    public function storyInteractions()
-    {
-        return $this->hasMany(MemberStoryInteraction::class);
-    }
-
-    public function storyRatings()
-    {
-        return $this->hasMany(MemberStoryRating::class);
-    }
-
-    // ✅ IMPROVED: More efficient relationship queries with proper pivot selection
-    public function likedStories(): BelongsToMany
-    {
-        return $this->belongsToMany(Story::class, 'member_story_interactions')
-            ->wherePivot('action', 'like')
-            ->withPivot(['created_at', 'updated_at'])
-            ->withTimestamps();
-    }
-
-    public function dislikedStories(): BelongsToMany
-    {
-        return $this->belongsToMany(Story::class, 'member_story_interactions')
-            ->wherePivot('action', 'dislike')
-            ->withPivot(['created_at', 'updated_at'])
-            ->withTimestamps();
-    }
-
-    public function bookmarkedStories(): BelongsToMany
-    {
-        return $this->belongsToMany(Story::class, 'member_story_interactions')
-            ->wherePivot('action', 'bookmark')
-            ->withPivot(['created_at', 'updated_at'])
-            ->withTimestamps();
-    }
-
-    public function viewedStories(): BelongsToMany
-    {
-        return $this->belongsToMany(Story::class, 'member_story_interactions')
-            ->wherePivot('action', 'view')
-            ->withPivot(['created_at', 'updated_at'])
-            ->withTimestamps();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSORS & MUTATORS - ✅ IMPROVED with Laravel 9+ syntax and better logic
-    |--------------------------------------------------------------------------
-    */
 
     // ✅ ENHANCED: Keep your existing modern accessor but add fallback logic
     protected function avatarUrl(): \Illuminate\Database\Eloquent\Casts\Attribute
@@ -435,6 +449,15 @@ class Member extends Authenticatable implements FilamentUser
         return $query->whereNull('avatar');
     }
 
+    // ✅ NEW: Filament panel access (if members need admin access)
+    public function canAccessPanel(Panel $panel): bool
+    {
+        // Only allow verified, active members with admin role
+        return $this->status === 'active' &&
+            $this->email_verified_at !== null &&
+            $this->hasRole('member_admin'); // If using Spatie Permission
+    }
+
     /*
     |--------------------------------------------------------------------------
     | METHODS - ✅ IMPROVED with better error handling and type safety
@@ -466,7 +489,6 @@ class Member extends Authenticatable implements FilamentUser
             ->exists();
     }
 
-
     public static function thisWeek(): Builder
     {
         return static::query()->whereBetween('created_at', [
@@ -475,14 +497,11 @@ class Member extends Authenticatable implements FilamentUser
         ]);
     }
 
-
-
-
-    // ✅ IMPROVED: Better error handling and return type
+    // ✅ FIXED: Better error handling and return type - Fixed PHPStan issue
     public function interactWith(Story $story, string $action): ?MemberStoryInteraction
     {
         try {
-            return $this->interactions()->updateOrCreate(
+            $interaction = $this->interactions()->updateOrCreate(
                 [
                     'story_id' => $story->id,
                     'action' => $action,
@@ -492,6 +511,7 @@ class Member extends Authenticatable implements FilamentUser
                     'action' => $action,
                 ]
             );
+            return $interaction instanceof MemberStoryInteraction ? $interaction : null;
         } catch (\Exception $e) {
             Log::error('Failed to create interaction', [
                 'member_id' => $this->id,
@@ -520,7 +540,7 @@ class Member extends Authenticatable implements FilamentUser
         $timeSpent = max(0, $timeSpent);
 
         try {
-            return $this->readingHistory()->updateOrCreate(
+            $history = $this->readingHistory()->updateOrCreate(
                 ['story_id' => $story->id],
                 [
                     'reading_progress' => $progress,
@@ -528,6 +548,7 @@ class Member extends Authenticatable implements FilamentUser
                     'last_read_at' => now(),
                 ]
             );
+            return $history instanceof MemberReadingHistory ? $history : null;
         } catch (\Exception $e) {
             Log::error('Failed to update reading progress', [
                 'member_id' => $this->id,
@@ -541,9 +562,10 @@ class Member extends Authenticatable implements FilamentUser
 
     public function getReadingProgress(Story $story): ?MemberReadingHistory
     {
-        return $this->readingHistory()
+        $history = $this->readingHistory()
             ->where('story_id', $story->id)
             ->first();
+        return $history instanceof MemberReadingHistory ? $history : null;
     }
 
     // ✅ IMPROVED: More comprehensive stats with caching
@@ -566,6 +588,140 @@ class Member extends Authenticatable implements FilamentUser
                 'favorite_category' => $this->getFavoriteCategory(),
                 'reading_streak_days' => $this->getCurrentReadingStreak(),
             ];
+        });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ✅ FIXED: Missing Analytics Methods - These methods were being called but not defined
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * ✅ FIXED: Missing clearCache() method that PHPStan couldn't find
+     */
+    public function clearCache(): void
+    {
+        $patterns = [
+            "member_{$this->id}_stats",
+            "member_{$this->id}_reading_history",
+            "member_reading_stats_{$this->id}",
+            "member_comprehensive_stats_{$this->id}",
+            "member_analytics_{$this->id}",
+        ];
+
+        foreach ($patterns as $pattern) {
+            Cache::forget($pattern);
+        }
+    }
+
+    /**
+     * ✅ FIXED: Missing getPreferredCategories() method
+     */
+    public function getPreferredCategories(): Collection
+    {
+        $cacheKey = "member_{$this->id}_preferred_categories";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function (): Collection {
+            return $this->interactions()
+                ->join('stories', 'member_story_interactions.story_id', '=', 'stories.id')
+                ->join('categories', 'stories.category_id', '=', 'categories.id')
+                ->where('action', 'like')
+                ->groupBy('categories.id', 'categories.name')
+                ->selectRaw('categories.id, categories.name, COUNT(*) as interaction_count')
+                ->orderByDesc('interaction_count')
+                ->limit(5)
+                ->get()
+                ->pluck('name', 'id');
+        });
+    }
+
+    /**
+     * ✅ FIXED: Missing getReadingConsistencyScore() method
+     */
+    public function getReadingConsistencyScore(): float
+    {
+        $cacheKey = "member_{$this->id}_consistency_score";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function (): float {
+            $readingDays = $this->readingHistory()
+                ->where('last_read_at', '>=', now()->subDays(30))
+                ->selectRaw('DATE(last_read_at) as read_date')
+                ->distinct()
+                ->count();
+
+            // Calculate consistency as percentage of days read in last 30 days
+            return round(($readingDays / 30) * 100, 1);
+        });
+    }
+
+    /**
+     * ✅ FIXED: Missing getMostReadCategory() method
+     */
+    public function getMostReadCategory(): ?string
+    {
+        $cacheKey = "member_{$this->id}_most_read_category";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function (): ?string {
+            return $this->readingHistory()
+                ->join('stories', 'member_reading_histories.story_id', '=', 'stories.id')
+                ->join('categories', 'stories.category_id', '=', 'categories.id')
+                ->groupBy('categories.name')
+                ->selectRaw('categories.name, COUNT(*) as read_count')
+                ->orderByDesc('read_count')
+                ->value('name');
+        });
+    }
+
+    /**
+     * ✅ FIXED: Missing getPreferredReadingTime() method
+     */
+    public function getPreferredReadingTime(): string
+    {
+        $cacheKey = "member_{$this->id}_preferred_reading_time";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function (): string {
+            $hourCounts = $this->readingHistory()
+                ->selectRaw('HOUR(last_read_at) as hour, COUNT(*) as count')
+                ->groupBy('hour')
+                ->orderByDesc('count')
+                ->first();
+
+            if (!$hourCounts || !isset($hourCounts->hour)) {
+                return 'No data';
+            }
+
+            $hour = $hourCounts->hour;
+
+            if ($hour >= 6 && $hour < 12) {
+                return 'Morning (6AM-12PM)';
+            } elseif ($hour >= 12 && $hour < 18) {
+                return 'Afternoon (12PM-6PM)';
+            } elseif ($hour >= 18 && $hour < 22) {
+                return 'Evening (6PM-10PM)';
+            } else {
+                return 'Night (10PM-6AM)';
+            }
+        });
+    }
+
+    /**
+     * ✅ FIXED: Missing getStoryCompletionRate() method
+     */
+    public function getStoryCompletionRate(): float
+    {
+        $cacheKey = "member_{$this->id}_completion_rate";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL_MEDIUM, function (): float {
+            $totalStarted = $this->readingHistory()
+                ->where('reading_progress', '>', 0)
+                ->count();
+
+            $totalCompleted = $this->readingHistory()
+                ->where('reading_progress', '>=', 100)
+                ->count();
+
+            return $totalStarted > 0 ? round(($totalCompleted / $totalStarted) * 100, 1) : 0;
         });
     }
 

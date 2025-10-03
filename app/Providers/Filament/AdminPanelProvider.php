@@ -33,18 +33,21 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->favicon(asset('favicon.ico'))
             ->brandName('Daily Stories Admin')
-            //->brandLogo(asset('images/logo.png'))
-            //->brandLogoHeight('1.5rem')
-            ->maxContentWidth('7xl') // This constrains the content width
-            ->sidebarCollapsibleOnDesktop() // Optional: Make sidebar collapsible
+            ->maxContentWidth('7xl')
+            ->sidebarCollapsibleOnDesktop()
+
+            // ✅ IMPORTANT: Discover Resources
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
+
+            // ✅ IMPORTANT: Discover Pages (includes NotificationDashboard)
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
+
             ->pages([
-                Pages\Dashboard::class,
+                Pages\Dashboard::class, // Default dashboard
             ])
+
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                // Analytics Widgets for Dashboard
                 \App\Filament\Widgets\MemberOverviewWidget::class,
                 \App\Filament\Widgets\MemberEngagementWidget::class,
                 \App\Filament\Widgets\TopMembersWidget::class,
@@ -69,6 +72,4 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ]);
     }
-
-    
 }

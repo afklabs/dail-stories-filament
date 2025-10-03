@@ -41,6 +41,6 @@ class AppServiceProvider extends ServiceProvider
                 'body' => request()->all(),
             ]);
         }
-        Story::observe(StoryObserver::class);
+        // Story::observe(StoryObserver::class);
     }
 }

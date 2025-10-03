@@ -807,4 +807,20 @@ class Member extends Authenticatable implements FilamentUser
             }
         });
     }
+
+    /**
+     * Get FCM tokens for this member
+     */
+    public function fcmTokens(): HasMany
+    {
+        return $this->hasMany(FCMToken::class);
+    }
+
+    /**
+     * Get active FCM tokens
+     */
+    public function activeFcmTokens(): HasMany
+    {
+        return $this->hasMany(FCMToken::class)->where('is_active', true);
+    }
 }

@@ -2,3 +2,5 @@
 /build/phpstan/
 phpstan-baseline.neon
 .phpstan-cache/
+storage/app/firebase/firebase-credentials.json
+

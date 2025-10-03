@@ -6,6 +6,7 @@ use App\Http\Controllers\API\MemberController;
 use App\Http\Controllers\API\StoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\API\FCMController;
 
 /*
 |--------------------------------------------------------------------------
@@ -103,7 +104,7 @@ Route::prefix('v1')
         // Categories and Tags endpoints
         Route::get('/categories', [StoryController::class, 'getCategories'])
             ->name('categories');
-            
+
         Route::get('/tags', [StoryController::class, 'getTags'])
             ->name('tags');
 
@@ -223,4 +224,13 @@ Route::prefix('v1')
                     ->name('rating')
                     ->middleware('throttle:20,1');
             });
+
+        // Public FCM routes (guest + members)
+        Route::post('/fcm/token', [FCMController::class, 'storeToken']);
+        Route::delete('/fcm/token', [FCMController::class, 'deleteToken']);
+
+        // Protected routes (members only)
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/members/fcm-tokens', [FCMController::class, 'getTokens']);
+        });
     });

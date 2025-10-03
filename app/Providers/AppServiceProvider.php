@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
+use App\Models\Story;
+use App\Observers\StoryObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,5 +41,6 @@ class AppServiceProvider extends ServiceProvider
                 'body' => request()->all(),
             ]);
         }
+        Story::observe(StoryObserver::class);
     }
 }

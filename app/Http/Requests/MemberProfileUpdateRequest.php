@@ -19,7 +19,7 @@ class MemberProfileUpdateRequest extends FormRequest
             'phone' => 'sometimes|string|max:20',
             'date_of_birth' => 'sometimes|date',
             'gender' => 'sometimes|in:male,female,other',
-            'current_password' => 'required_with:new_password|string',
+            'current_password' => 'required_with:new_password|nullable|string',
             'new_password' => 'sometimes|string|min:8|confirmed',
             'avatar' => 'sometimes|image|max:2048',
         ];

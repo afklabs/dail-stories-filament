@@ -73,6 +73,16 @@ Route::prefix('v1')
                 ->middleware('throttle:3,1');
         });
 
+        // Get ALL categories (for submission form)
+        Route::get('/categories/all', function () {
+            $categories = \App\Models\Category::orderBy('name')->get(['id', 'name']);
+            return response()->json([
+                'success' => true,
+                'data' => $categories,
+            ]);
+        })->name('categories.all');
+
+        
         // Public story browsing - NO DEVICE VERIFICATION FOR PUBLIC ROUTES
         Route::prefix('stories')->name('stories.')->group(function (): void {
             // ✅ PRIMARY DISCOVERY ROUTES - Public Access
@@ -233,4 +243,32 @@ Route::prefix('v1')
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/members/fcm-tokens', [FCMController::class, 'getTokens']);
         });
+
+        /*
+|--------------------------------------------------------------------------
+| Story Submissions (Member Feature)
+|--------------------------------------------------------------------------
+*/
+
+        // Public endpoint - Get submission settings
+        Route::prefix('submissions')->name('submissions.')->group(function (): void {
+            Route::get('/settings', [App\Http\Controllers\API\MemberStorySubmissionController::class, 'getSettings'])
+                ->name('settings')
+                ->middleware('throttle:20,1');
+        });
+
+        // Protected endpoints - Submit stories
+        Route::prefix('submissions')
+            ->name('submissions.')
+            ->middleware(['auth:sanctum'])
+            ->group(function (): void {
+                Route::post('/submit', [App\Http\Controllers\API\MemberStorySubmissionController::class, 'submit'])
+                    ->name('submit')
+                    ->middleware('throttle:5,1');
+
+                // Future feature - member submission history
+                Route::get('/my-submissions', [App\Http\Controllers\API\MemberStorySubmissionController::class, 'mySubmissions'])
+                    ->name('my-submissions')
+                    ->middleware('throttle:20,1');
+            });
     });

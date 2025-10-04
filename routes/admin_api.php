@@ -235,6 +235,7 @@ Route::prefix('members')->name('members.')->group(function (): void {
         ->middleware('throttle:10,1');
 });
 
+
 /*
 |--------------------------------------------------------------------------
 | API Documentation & Development Tools

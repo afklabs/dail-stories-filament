@@ -53,15 +53,16 @@ class MemberStorySubmissionResource extends Resource
                     ])
                     ->columns(2),
 
+                // ✅ FIXED: Member Info Section with Placeholder (Read-Only Display)
                 Forms\Components\Section::make('Member Info')
                     ->schema([
-                        Forms\Components\TextInput::make('member.name')
-                            ->label('Member')
-                            ->disabled(),
+                        Forms\Components\Placeholder::make('member_name')
+                            ->label('Member Name')
+                            ->content(fn($record) => $record?->member?->name ?? 'N/A'),
 
-                        Forms\Components\TextInput::make('member.email')
-                            ->label('Email')
-                            ->disabled(),
+                        Forms\Components\Placeholder::make('member_email')
+                            ->label('Member Email')
+                            ->content(fn($record) => $record?->member?->email ?? 'N/A'),
                     ])
                     ->columns(2),
 
@@ -80,6 +81,8 @@ class MemberStorySubmissionResource extends Resource
                         Forms\Components\Textarea::make('admin_notes')
                             ->label('Admin Notes')
                             ->rows(3)
+                            ->placeholder('Add review notes or feedback...')
+                            ->helperText('Internal notes visible only to admins')
                             ->columnSpanFull(),
                     ])
                     ->columns(1),
@@ -98,7 +101,8 @@ class MemberStorySubmissionResource extends Resource
                     ->label('Story Title')
                     ->searchable()
                     ->limit(50)
-                    ->sortable(),
+                    ->sortable()
+                    ->tooltip(fn($record) => $record->story_title),
 
                 Tables\Columns\TextColumn::make('member.name')
                     ->label('Member')
@@ -107,7 +111,9 @@ class MemberStorySubmissionResource extends Resource
 
                 Tables\Columns\TextColumn::make('category.name')
                     ->label('Category')
-                    ->sortable(),
+                    ->sortable()
+                    ->badge()
+                    ->color('info'),
 
                 Tables\Columns\BadgeColumn::make('submission_status')
                     ->label('Status')
@@ -190,6 +196,6 @@ class MemberStorySubmissionResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['member', 'category']);
+            ->with(['member', 'category']); // ✅ Always load relationships
     }
 }

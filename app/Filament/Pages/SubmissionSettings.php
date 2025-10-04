@@ -18,9 +18,9 @@ class SubmissionSettings extends Page implements HasForms
 
     protected static string $view = 'filament.pages.submission-settings';
 
-    protected static ?string $navigationLabel = 'إعدادات القصص';
+    protected static ?string $navigationLabel = 'Story Submission Settings';
 
-    protected static ?string $title = 'إعدادات إرسال القصص';
+    protected static ?string $title = 'إعدادت إرسال القصص';
 
     protected static ?int $navigationSort = 10;
 
@@ -65,7 +65,7 @@ class SubmissionSettings extends Page implements HasForms
         SubmissionSetting::updateTermsText($data['terms_text']);
 
         Notification::make()
-            ->title('تم الحفظ بنجاح')
+            ->title('Saved successfully')
             ->success()
             ->send();
     }

@@ -17,18 +17,18 @@ class ViewMemberStorySubmission extends ViewRecord
             Actions\EditAction::make(),
 
             Actions\Action::make('archive')
-                ->label('أرشفة')
+                ->label('Archive')
                 ->icon('heroicon-o-archive-box')
                 ->color('secondary')
                 ->visible(fn() => $this->record->submission_status === 'pending')
                 ->requiresConfirmation()
-                ->modalHeading('أرشفة القصة')
-                ->modalDescription('هل أنت متأكد من أرشفة هذه القصة؟')
+                ->modalHeading('Archive Story')
+                ->modalDescription('Are you sure you want to archive the story?')
                 ->action(function () {
                     $this->record->markAsArchived(auth()->id());
 
                     Notification::make()
-                        ->title('تم الأرشفة بنجاح')
+                        ->title('Story archived successfully')
                         ->success()
                         ->send();
 
@@ -36,18 +36,18 @@ class ViewMemberStorySubmission extends ViewRecord
                 }),
 
             Actions\Action::make('reject')
-                ->label('رفض')
+                ->label('Reject')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
                 ->visible(fn() => $this->record->submission_status === 'pending')
                 ->requiresConfirmation()
-                ->modalHeading('رفض القصة')
-                ->modalDescription('هل أنت متأكد من رفض هذه القصة؟')
+                ->modalHeading('Reject Story')
+                ->modalDescription('Are you sure you want to reject the story?')
                 ->action(function () {
                     $this->record->markAsRejected(auth()->id());
 
                     Notification::make()
-                        ->title('تم الرفض')
+                        ->title('Story Rejected!')
                         ->warning()
                         ->send();
 
@@ -55,7 +55,7 @@ class ViewMemberStorySubmission extends ViewRecord
                 }),
 
             Actions\Action::make('create_story')
-                ->label('إنشاء قصة من هذا النص')
+                ->label('Create a story from this content')
                 ->icon('heroicon-o-document-plus')
                 ->color('success')
                 ->visible(fn() => $this->record->submission_status === 'pending')

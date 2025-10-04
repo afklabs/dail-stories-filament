@@ -19,11 +19,11 @@ class MemberStorySubmissionResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-paper-airplane';
 
-    protected static ?string $navigationLabel = 'قصص الأعضاء';
+    protected static ?string $navigationLabel = 'Members Stories';
 
-    protected static ?string $modelLabel = 'قصة عضو';
+    protected static ?string $modelLabel = 'Member Story';
 
-    protected static ?string $pluralModelLabel = 'قصص الأعضاء';
+    protected static ?string $pluralModelLabel = 'Members Stories';
 
     protected static ?int $navigationSort = 3;
 
@@ -31,54 +31,54 @@ class MemberStorySubmissionResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('معلومات القصة')
+                Forms\Components\Section::make('Story Info')
                     ->schema([
                         Forms\Components\TextInput::make('story_title')
-                            ->label('عنوان القصة')
+                            ->label('Story Title')
                             ->required()
                             ->maxLength(255)
                             ->disabled(),
 
                         Forms\Components\Select::make('category_id')
-                            ->label('التصنيف')
+                            ->label('Category')
                             ->options(Category::pluck('name', 'id'))
                             ->required()
                             ->disabled(),
 
                         Forms\Components\RichEditor::make('story_content')
-                            ->label('محتوى القصة')
+                            ->label('Story Content')
                             ->required()
                             ->disabled()
                             ->columnSpanFull(),
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('معلومات العضو')
+                Forms\Components\Section::make('Member Info')
                     ->schema([
                         Forms\Components\TextInput::make('member.name')
-                            ->label('اسم العضو')
+                            ->label('Member')
                             ->disabled(),
 
                         Forms\Components\TextInput::make('member.email')
-                            ->label('البريد الإلكتروني')
+                            ->label('Email')
                             ->disabled(),
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('حالة المراجعة')
+                Forms\Components\Section::make('Review Status')
                     ->schema([
                         Forms\Components\Select::make('submission_status')
-                            ->label('الحالة')
+                            ->label('Status')
                             ->options([
-                                'pending' => 'قيد الانتظار',
-                                'archived' => 'مؤرشف',
-                                'published' => 'منشور',
-                                'rejected' => 'مرفوض',
+                                'pending' => 'Pending',
+                                'archived' => 'Archived',
+                                'published' => 'Published',
+                                'rejected' => 'Rejected',
                             ])
                             ->required(),
 
                         Forms\Components\Textarea::make('admin_notes')
-                            ->label('ملاحظات الإدارة')
+                            ->label('Admin Notes')
                             ->rows(3)
                             ->columnSpanFull(),
                     ])
@@ -95,22 +95,22 @@ class MemberStorySubmissionResource extends Resource
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('story_title')
-                    ->label('عنوان القصة')
+                    ->label('Story Title')
                     ->searchable()
                     ->limit(50)
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('member.name')
-                    ->label('العضو')
+                    ->label('Member')
                     ->searchable()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('category.name')
-                    ->label('التصنيف')
+                    ->label('Category')
                     ->sortable(),
 
                 Tables\Columns\BadgeColumn::make('submission_status')
-                    ->label('الحالة')
+                    ->label('Status')
                     ->colors([
                         'warning' => 'pending',
                         'secondary' => 'archived',
@@ -125,22 +125,22 @@ class MemberStorySubmissionResource extends Resource
                     ]),
 
                 Tables\Columns\TextColumn::make('submitted_at')
-                    ->label('تاريخ الإرسال')
+                    ->label('Submission Date')
                     ->dateTime('Y-m-d H:i')
                     ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('submission_status')
-                    ->label('الحالة')
+                    ->label('Status')
                     ->options([
-                        'pending' => 'قيد الانتظار',
-                        'archived' => 'مؤرشف',
-                        'published' => 'منشور',
-                        'rejected' => 'مرفوض',
+                        'pending' => 'Pending',
+                        'archived' => 'Archived',
+                        'published' => 'Published',
+                        'rejected' => 'Rejected',
                     ]),
 
                 SelectFilter::make('category_id')
-                    ->label('التصنيف')
+                    ->label('Category')
                     ->relationship('category', 'name'),
             ])
             ->actions([
@@ -148,7 +148,7 @@ class MemberStorySubmissionResource extends Resource
                 Tables\Actions\EditAction::make(),
 
                 Tables\Actions\Action::make('archive')
-                    ->label('أرشفة')
+                    ->label('Archive')
                     ->icon('heroicon-o-archive-box')
                     ->color('secondary')
                     ->visible(fn($record) => $record->submission_status === 'pending')
@@ -156,7 +156,7 @@ class MemberStorySubmissionResource extends Resource
                     ->action(fn($record) => $record->markAsArchived(auth()->id())),
 
                 Tables\Actions\Action::make('reject')
-                    ->label('رفض')
+                    ->label('Reject')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
                     ->visible(fn($record) => $record->submission_status === 'pending')

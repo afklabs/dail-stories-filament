@@ -830,7 +830,7 @@ class StoryController extends Controller
                     'reading_progress' => $progressRecord->reading_progress,
                     'time_spent' => $progressRecord->time_spent,
                     'is_completed' => $progressRecord->reading_progress >= 100,
-                    'status' => $this->getProgressStatus($progressRecord->reading_progress),
+                    'status' => $this->getProgressStatus((float) $progressRecord->reading_progress),
                     'updated_at' => $progressRecord->updated_at->toISOString(),
                 ],
             ]);
@@ -847,6 +847,57 @@ class StoryController extends Controller
             ], 500);
         }
     }
+
+
+    /**
+     * Get user's rating for a story
+     * GET /v1/stories/{id}/rating
+     */
+    public function getUserRating(Story $story): JsonResponse
+    {
+        try {
+            $memberId = auth('sanctum')->id();
+
+            $rating = MemberStoryRating::where([
+                'member_id' => $memberId,
+                'story_id' => $story->id,
+            ])->first();
+
+            if (!$rating) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'has_rated' => false,
+                        'rating' => null,
+                        'comment' => null,
+                        'rated_at' => null,
+                    ],
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_rated' => true,
+                    'rating' => $rating->rating,
+                    'comment' => $rating->comment,
+                    'rated_at' => $rating->created_at->toISOString(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Get user rating error', [
+                'story_id' => $story->id,
+                'member_id' => auth('sanctum')->id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get rating',
+            ], 500);
+        }
+    }
+
 
     /**
      * Get story analytics for admin dashboard
@@ -1010,7 +1061,7 @@ class StoryController extends Controller
                 'time_spent' => $memberData['reading_history']?->time_spent ?? 0,
                 'last_read_at' => $memberData['reading_history']?->last_read_at?->toISOString(),
                 'is_completed' => ($memberData['reading_history']?->reading_progress ?? 0) >= 100,
-                'status' => $this->getProgressStatus($memberData['reading_history']?->reading_progress ?? 0),
+                'status' => $this->getProgressStatus((float) ($memberData['reading_history']?->reading_progress ?? 0)),
             ],
         ];
     }
@@ -1029,6 +1080,8 @@ class StoryController extends Controller
             default => 'unknown',
         };
     }
+
+
 
     /**
      * Calculate story completion rate

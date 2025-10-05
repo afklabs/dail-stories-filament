@@ -110,6 +110,22 @@ Route::prefix('v1')
                 ->name('search')
                 ->middleware('throttle:30,1');
         });
+        // Story interactions - Protected routes (require authentication)
+        Route::prefix('stories')->name('stories.')
+            ->middleware('auth:sanctum')
+            ->group(function (): void {
+                Route::get('/{story}/progress', [StoryController::class, 'getReadingProgress'])
+                    ->name('progress.get')
+                    ->middleware('throttle:60,1');
+
+                Route::post('/{story}/progress', [StoryController::class, 'updateReadingProgress'])
+                    ->name('progress.update')
+                    ->middleware('throttle:60,1');
+
+                Route::get('/{story}/rating', [StoryController::class, 'getUserRating'])
+                    ->name('rating.get')
+                    ->middleware('throttle:60,1');
+            });
 
         // Categories and Tags endpoints
         Route::get('/categories', [StoryController::class, 'getCategories'])

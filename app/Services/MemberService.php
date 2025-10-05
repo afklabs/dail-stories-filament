@@ -112,7 +112,7 @@ class MemberService
                     'stories_bookmarked' => $this->getBookmarkedStoriesCount($memberId),
                     'stories_shared' => $this->getSharedStoriesCount($memberId),
                 ],
-                'achievements' => $this->getReadingAchievements($memberId),
+                'achievements' => $this->getReadingBadges($memberId),
                 'generated_at' => now()->toISOString(),
             ];
         });
@@ -513,9 +513,13 @@ class MemberService
     }
 
     /**
-     * Get reading achievements for gamification
+     * Get reading badges for gamification (renamed from getReadingAchievements)
+     * Used internally for achievements display
+     * 
+     * @param int $memberId
+     * @return array
      */
-    private function getReadingAchievements(int $memberId): array
+    private function getReadingBadges(int $memberId): array
     {
         $achievements = [];
         $completedCount = $this->getCompletedStoriesCount($memberId);
@@ -603,6 +607,56 @@ class MemberService
         }
 
         return $achievements;
+    }
+
+    /**
+     * Get reading achievements for profile display (streak & words read)
+     * PUBLIC method for API endpoint
+     * 
+     * @param int $memberId
+     * @return array
+     */
+    public function getReadingAchievements(int $memberId): array
+    {
+        try {
+            // 1. Get reading streak (uses existing method)
+            $streak = $this->getReadingStreak($memberId);
+
+            // 2. Get all completed stories (100% progress)
+            $completedStories = MemberReadingHistory::where('member_id', $memberId)
+                ->where('reading_progress', '>=', 100)
+                ->with('story:id,reading_time_minutes')
+                ->get();
+
+            // 3. Calculate total words read
+            // Formula: reading_time_minutes * 200 WPM (your existing calculation)
+            $totalWords = 0;
+            foreach ($completedStories as $history) {
+                if ($history->story && $history->story->reading_time_minutes > 0) {
+                    $totalWords += ($history->story->reading_time_minutes * 200);
+                }
+            }
+
+            return [
+                'reading_streak_days' => $streak,
+                'total_words_read' => $totalWords,
+                'completed_stories_count' => $completedStories->count(),
+                'last_updated' => now()->toISOString(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('Error calculating reading achievements', [
+                'member_id' => $memberId,
+                'error' => $e->getMessage(),
+            ]);
+
+            // Return empty state on error
+            return [
+                'reading_streak_days' => 0,
+                'total_words_read' => 0,
+                'completed_stories_count' => 0,
+                'last_updated' => now()->toISOString(),
+            ];
+        }
     }
 
     /**

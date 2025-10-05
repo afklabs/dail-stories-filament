@@ -82,7 +82,7 @@ Route::prefix('v1')
             ]);
         })->name('categories.all');
 
-        
+
         // Public story browsing - NO DEVICE VERIFICATION FOR PUBLIC ROUTES
         Route::prefix('stories')->name('stories.')->group(function (): void {
             // ✅ PRIMARY DISCOVERY ROUTES - Public Access
@@ -156,6 +156,11 @@ Route::prefix('v1')
                         Route::delete('/account', [MemberController::class, 'deleteAccount'])
                             ->name('delete-account')
                             ->middleware('throttle:1,5');
+
+                        // ✅ NEW: Reading achievements endpoint for profile cards
+                        Route::get('/reading-achievements', [MemberController::class, 'getReadingAchievements'])
+                            ->name('reading-achievements')
+                            ->middleware('throttle:30,1');
                     });
 
                 /*
@@ -245,10 +250,10 @@ Route::prefix('v1')
         });
 
         /*
-|--------------------------------------------------------------------------
-| Story Submissions (Member Feature)
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Story Submissions (Member Feature)
+        |--------------------------------------------------------------------------
+        */
 
         // Public endpoint - Get submission settings
         Route::prefix('submissions')->name('submissions.')->group(function (): void {

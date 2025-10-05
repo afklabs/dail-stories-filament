@@ -1171,4 +1171,34 @@ class MemberController extends Controller
 
         return response()->json($response, $code);
     }
+
+
+    /**
+     * Get reading achievements (streak & words read)
+     * GET /v1/members/reading-achievements
+     */
+    public function getReadingAchievements(Request $request): JsonResponse
+    {
+        try {
+            $member = $request->user();
+
+            if (!$member) {
+                return $this->errorResponse('Unauthorized', 401);
+            }
+
+            $achievements = $this->memberService->getReadingAchievements($member->id);
+
+            return $this->successResponse(
+                $achievements,
+                'Reading achievements retrieved successfully'
+            );
+        } catch (\Exception $e) {
+            Log::error('Error getting reading achievements', [
+                'member_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse('Failed to load reading achievements', 500);
+        }
+    }
 }

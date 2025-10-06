@@ -16,7 +16,19 @@ class FAQ extends Model
     use HasFactory;
 
     /**
+     * ⚠️ CRITICAL: Specify table name explicitly
+     * 
+     * Without this, Laravel converts "FAQ" to "f_a_q_s"
+     * but our migration creates table "faqs"
+     *
+     * @var string
+     */
+    protected $table = 'faqs';
+
+    /**
      * The attributes that are mass assignable.
+     *
+     * @var array<string>
      */
     protected $fillable = [
         'question',
@@ -27,6 +39,8 @@ class FAQ extends Model
 
     /**
      * The attributes that should be cast.
+     *
+     * @var array<string, string>
      */
     protected $casts = [
         'is_active' => 'boolean',
@@ -35,6 +49,8 @@ class FAQ extends Model
 
     /**
      * Default values for attributes
+     *
+     * @var array<string, mixed>
      */
     protected $attributes = [
         'order' => 0,
@@ -43,6 +59,9 @@ class FAQ extends Model
 
     /**
      * Scope: Get only active FAQs
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     public function scopeActive($query)
     {
@@ -51,6 +70,9 @@ class FAQ extends Model
 
     /**
      * Scope: Order by display order
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     public function scopeOrdered($query)
     {
@@ -59,6 +81,8 @@ class FAQ extends Model
 
     /**
      * Get active FAQs in display order (for API)
+     *
+     * @return \Illuminate\Database\Eloquent\Collection
      */
     public static function getActiveFAQs()
     {

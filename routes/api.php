@@ -7,6 +7,8 @@ use App\Http\Controllers\API\StoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\FCMController;
+use App\Http\Controllers\API\FAQController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -292,4 +294,21 @@ Route::prefix('v1')
                     ->name('my-submissions')
                     ->middleware('throttle:20,1');
             });
+
+
+        /*
+|--------------------------------------------------------------------------
+| FAQ Routes (Public - No Authentication Required)
+|--------------------------------------------------------------------------
+*/
+
+        Route::prefix('v1/faqs')->group(function () {
+            // Get all active FAQs
+            Route::get('/', [FAQController::class, 'index'])
+                ->name('faqs.index');
+
+            // Get specific FAQ by ID
+            Route::get('/{id}', [FAQController::class, 'show'])
+                ->name('faqs.show');
+        });
     });

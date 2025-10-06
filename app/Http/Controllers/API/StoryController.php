@@ -858,37 +858,51 @@ class StoryController extends Controller
         try {
             $memberId = auth('sanctum')->id();
 
-            $rating = MemberStoryRating::where([
+            // Load story rating aggregate
+            $aggregate = StoryRatingAggregate::where('story_id', $story->id)->first();
+
+            // Get member's rating
+            $memberRating = MemberStoryRating::where([
                 'member_id' => $memberId,
                 'story_id' => $story->id,
             ])->first();
 
-            if (!$rating) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'has_rated' => false,
-                        'rating' => null,
-                        'comment' => null,
-                        'rated_at' => null,
-                    ],
-                ]);
-            }
-
+            // ✅ FIXED: Return complete data structure with all required fields
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'has_rated' => true,
-                    'rating' => $rating->rating,
-                    'comment' => $rating->comment,
-                    'rated_at' => $rating->created_at->toISOString(),
+                    // Stats section - overall story rating statistics
+                    'stats' => [
+                        'average_rating' => $aggregate?->average_rating ?? 0.0,
+                        'total_ratings' => $aggregate?->total_ratings ?? 0,
+                        'rating_distribution' => $aggregate?->rating_distribution ?? [
+                            '1' => 0,
+                            '2' => 0,
+                            '3' => 0,
+                            '4' => 0,
+                            '5' => 0,
+                        ],
+                        'comments_count' => $aggregate?->comments_count ?? 0,
+                    ],
+                    // Member rating section - user's specific rating WITH ALL REQUIRED FIELDS
+                    'member_rating' => $memberRating ? [
+                        'id' => $memberRating->id,                    // ✅ إضافة id
+                        'story_id' => $memberRating->story_id,        // ✅ إضافة story_id
+                        'member_id' => $memberRating->member_id,      // ✅ إضافة member_id
+                        'rating' => $memberRating->rating,
+                        'comment' => $memberRating->comment,
+                        'created_at' => $memberRating->created_at->toISOString(),
+                        'updated_at' => $memberRating->updated_at->toISOString(),
+                    ] : null,
                 ],
+                'message' => $memberRating ? 'Rating retrieved successfully' : 'No rating found',
             ]);
         } catch (\Exception $e) {
             Log::error('Get user rating error', [
                 'story_id' => $story->id,
                 'member_id' => auth('sanctum')->id(),
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
@@ -897,7 +911,6 @@ class StoryController extends Controller
             ], 500);
         }
     }
-
 
     /**
      * Get story analytics for admin dashboard

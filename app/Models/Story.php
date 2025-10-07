@@ -299,6 +299,15 @@ class Story extends Model
             ->orderBy('created_at', 'desc');
     }
 
+    /**
+     * Get the original member submission (if this story was created from a submission)
+     */
+    public function originalSubmission(): HasOne
+    {
+        return $this->hasOne(MemberStorySubmission::class, 'published_story_id');
+    }
+
+
     /*
     |--------------------------------------------------------------------------
     | ACCESSORS & MUTATORS

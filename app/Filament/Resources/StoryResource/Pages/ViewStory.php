@@ -161,6 +161,64 @@ class ViewStory extends ViewRecord
                             ]),
                     ]),
 
+
+                // Original Submission Section (if story came from member submission)
+                Infolists\Components\Section::make('Original Submission')
+                    ->schema([
+                        Infolists\Components\Grid::make(3)
+                            ->schema([
+                                Infolists\Components\TextEntry::make('originalSubmission.story_title')
+                                    ->label('Original Title')
+                                    ->weight(FontWeight::Bold)
+                                    ->getStateUsing(fn($record) => $record->originalSubmission?->story_title)
+                                    ->url(fn($record) => $record->originalSubmission
+                                        ? route('filament.admin.resources.member-story-submissions.view', [
+                                            'record' => $record->originalSubmission->id
+                                        ])
+                                        : null)
+                                    ->openUrlInNewTab()
+                                    ->icon('heroicon-o-document-text')
+                                    ->color('info')
+                                    ->placeholder('N/A'),
+
+                                Infolists\Components\TextEntry::make('originalSubmission.member.name')
+                                    ->label('Submitted By')
+                                    ->getStateUsing(fn($record) => $record->originalSubmission?->member?->name)
+                                    ->badge()
+                                    ->color('success')
+                                    ->icon('heroicon-o-user')
+                                    ->url(fn($record) => $record->originalSubmission
+                                        ? route('filament.admin.resources.members.view', [
+                                            'record' => $record->originalSubmission->member_id
+                                        ])
+                                        : null)
+                                    ->openUrlInNewTab()
+                                    ->placeholder('N/A'),
+
+                                Infolists\Components\TextEntry::make('originalSubmission.submitted_at')
+                                    ->label('Submitted Date')
+                                    ->getStateUsing(fn($record) => $record->originalSubmission?->submitted_at)
+                                    ->dateTime('Y-m-d H:i:s')
+                                    ->badge()
+                                    ->color('warning')
+                                    ->icon('heroicon-o-calendar')
+                                    ->placeholder('N/A'),
+                            ]),
+
+                        Infolists\Components\Grid::make(1)
+                            ->schema([
+                                Infolists\Components\TextEntry::make('originalSubmission.admin_notes')
+                                    ->label('Review Notes')
+                                    ->getStateUsing(fn($record) => $record->originalSubmission?->admin_notes)
+                                    ->prose()
+                                    ->placeholder('No admin notes')
+                                    ->columnSpanFull(),
+                            ]),
+                    ])
+                    ->visible(fn($record) => $record->originalSubmission !== null)
+                    ->icon('heroicon-o-user-circle')
+                    ->description('This story was created from a member submission'),
+
                 Infolists\Components\Section::make('Tags')
                     ->schema([
                         Infolists\Components\TextEntry::make('tags.name')
@@ -183,5 +241,22 @@ class ViewStory extends ViewRecord
                     ])
                     ->collapsible(),
             ]);
+    }
+
+    /**
+     * Get the original submission for this story
+     */
+    protected function getOriginalSubmission($record): ?\App\Models\MemberStorySubmission
+    {
+        if (!$record) {
+            return null;
+        }
+
+        // Cache the result to avoid multiple database queries
+        return once(function () use ($record) {
+            return \App\Models\MemberStorySubmission::with(['member'])
+                ->where('published_story_id', $record->id)
+                ->first();
+        });
     }
 }

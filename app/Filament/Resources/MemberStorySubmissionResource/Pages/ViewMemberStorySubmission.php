@@ -128,6 +128,36 @@ class ViewMemberStorySubmission extends ViewRecord
                     ])
                     ->collapsible(),
 
+
+                // Published Story Section (if exists)
+                Infolists\Components\Section::make('Published Story')
+                    ->schema([
+                        Infolists\Components\TextEntry::make('publishedStory.title')
+                            ->label('Published Story Title')
+                            ->weight(FontWeight::Bold)
+                            ->url(fn($record) => $record->published_story_id
+                                ? route('filament.admin.resources.stories.edit', ['record' => $record->published_story_id])
+                                : null)
+                            ->openUrlInNewTab()
+                            ->badge()
+                            ->color('success')
+                            ->icon('heroicon-o-link'),
+
+                        Infolists\Components\TextEntry::make('publishedStory.views')
+                            ->label('Story Views')
+                            ->badge()
+                            ->color('info')
+                            ->icon('heroicon-o-eye'),
+
+                        Infolists\Components\TextEntry::make('publishedStory.created_at')
+                            ->label('Published Date')
+                            ->dateTime('Y-m-d H:i:s')
+                            ->badge()
+                            ->color('warning'),
+                    ])
+                    ->visible(fn($record) => $record->published_story_id !== null)
+                    ->columns(3),
+
                 // Metadata Section
                 Infolists\Components\Section::make('Metadata')
                     ->schema([
@@ -236,12 +266,30 @@ class ViewMemberStorySubmission extends ViewRecord
                 ->visible(fn() => $this->record->submission_status === 'pending')
                 ->requiresConfirmation()
                 ->modalHeading('Create Story')
-                ->modalDescription('This will create a new story from this submission. The submission will remain unchanged.')
-                ->url(fn() => route('filament.admin.resources.stories.create', [
-                    'title' => $this->record->story_title,
-                    'content' => $this->record->story_content,
-                    'category_id' => $this->record->category_id,
-                ])),
+                ->modalDescription('This will create a new story from this submission and link them together.')
+                ->action(function () {
+                    // Create the story
+                    $story = \App\Models\Story::create([
+                        'title' => $this->record->story_title,
+                        'content' => $this->record->story_content,
+                        'category_id' => $this->record->category_id,
+                        'author' => $this->record->member->name, // Credit the member
+                        'active' => false, // Start as draft
+                        'reading_time_minutes' => (int) ceil(str_word_count(strip_tags($this->record->story_content)) / 200),
+                    ]);
+
+                    // Link submission to the published story
+                    $this->record->markAsPublished($story->id, auth()->id());
+
+                    Notification::make()
+                        ->title('Story Created Successfully')
+                        ->body('The story has been created and linked to this submission.')
+                        ->success()
+                        ->send();
+
+                    // Redirect to edit the new story
+                    return redirect()->route('filament.admin.resources.stories.edit', ['record' => $story->id]);
+                }),
 
             Actions\DeleteAction::make()
                 ->visible(fn() => $this->record->submission_status !== 'published'),

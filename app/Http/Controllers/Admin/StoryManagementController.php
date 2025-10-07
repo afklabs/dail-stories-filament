@@ -161,7 +161,7 @@ class StoryManagementController extends Controller
                     'extended',
                     ['active_until' => $previousActiveUntil],
                     ['active_until' => $newActiveUntil],
-                    $reason,
+                    (string) $reason, // cast here
                     ['active_until']
                 );
 
@@ -322,6 +322,6 @@ class StoryManagementController extends Controller
         }
 
         // Clear dashboard cache
-        Cache::forget('dashboard_overview_'.now()->format('Y-m-d-H-i'));
+        Cache::forget('dashboard_overview_' . now()->format('Y-m-d-H-i'));
     }
 }

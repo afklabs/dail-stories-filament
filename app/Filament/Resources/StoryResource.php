@@ -71,7 +71,7 @@ class StoryResource extends Resource
                                 if (empty($get('excerpt')) && ! empty($state)) {
                                     $plainText = strip_tags($state);
                                     $plainText = preg_replace('/\s+/', ' ', $plainText);
-                                    $excerpt = substr(trim($plainText), 0, 160).'...';
+                                    $excerpt = substr(trim($plainText), 0, 160) . '...';
                                     $set('excerpt', $excerpt);
                                 }
 
@@ -152,13 +152,13 @@ class StoryResource extends Resource
                         Forms\Components\DateTimePicker::make('active_from')
                             ->label('Publish From')
                             ->hint('When this story should become active')
-                            ->visible(fn (Forms\Get $get): bool => $get('active'))
+                            ->visible(fn(Forms\Get $get): bool => $get('active'))
                             ->default(now()),
 
                         Forms\Components\DateTimePicker::make('active_until')
                             ->label('Publish Until')
                             ->hint('When this story should expire (optional)')
-                            ->visible(fn (Forms\Get $get): bool => $get('active'))
+                            ->visible(fn(Forms\Get $get): bool => $get('active'))
                             ->after('active_from'),
 
                         Forms\Components\TextInput::make('reading_time_minutes')
@@ -183,7 +183,22 @@ class StoryResource extends Resource
                             ->dehydrated(false),
                     ])
                     ->columns(1)
-                    ->visible(fn ($record) => $record !== null),
+                    ->visible(fn($record) => $record !== null),
+
+                Forms\Components\Placeholder::make('original_submission')
+                    ->label('Original Submission')
+                    ->content(function ($record) {
+                        $submission = \App\Models\MemberStorySubmission::where('published_story_id', $record->id)->first();
+
+                        if (!$submission) {
+                            return 'Created directly by admin';
+                        }
+
+                        return "Submitted by: {$submission->member->name} on " . $submission->submitted_at->format('Y-m-d');
+                    })
+                    ->visible(fn($record) => $record !== null),
+
+
             ]);
     }
 
@@ -229,7 +244,7 @@ class StoryResource extends Resource
 
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'published' => 'success',
                         'scheduled' => 'warning',
                         'expired' => 'danger',
@@ -245,7 +260,7 @@ class StoryResource extends Resource
 
                 Tables\Columns\TextColumn::make('reading_time_minutes')
                     ->label('Reading Time')
-                    ->formatStateUsing(fn ($state) => $state.' min')
+                    ->formatStateUsing(fn($state) => $state . ' min')
                     ->alignCenter()
                     ->sortable(),
 
@@ -255,7 +270,7 @@ class StoryResource extends Resource
                         $rating = $record->average_rating;
                         $count = $record->total_ratings;
 
-                        return $rating > 0 ? number_format($rating, 1).' ★ ('.$count.')' : 'No ratings';
+                        return $rating > 0 ? number_format($rating, 1) . ' ★ (' . $count . ')' : 'No ratings';
                     })
                     ->alignCenter(),
 
@@ -283,18 +298,21 @@ class StoryResource extends Resource
                     ]),
 
                 Filter::make('scheduled')
-                    ->query(fn (Builder $query): Builder => $query->where('active', true)
-                        ->where('active_from', '>', now())
+                    ->query(
+                        fn(Builder $query): Builder => $query->where('active', true)
+                            ->where('active_from', '>', now())
                     ),
 
                 Filter::make('expired')
-                    ->query(fn (Builder $query): Builder => $query->where('active', true)
-                        ->where('active_until', '<', now())
+                    ->query(
+                        fn(Builder $query): Builder => $query->where('active', true)
+                            ->where('active_until', '<', now())
                     ),
 
                 Filter::make('high_views')
                     ->label('High Views (>1000)')
-                    ->query(fn (Builder $query): Builder => $query->where('views', '>', 1000)
+                    ->query(
+                        fn(Builder $query): Builder => $query->where('views', '>', 1000)
                     ),
             ])
             ->actions([
@@ -303,9 +321,9 @@ class StoryResource extends Resource
                 Tables\Actions\DeleteAction::make(),
 
                 Tables\Actions\Action::make('toggle_active')
-                    ->label(fn ($record) => $record->active ? 'Unpublish' : 'Publish')
-                    ->icon(fn ($record) => $record->active ? 'heroicon-o-eye-slash' : 'heroicon-o-eye')
-                    ->color(fn ($record) => $record->active ? 'danger' : 'success')
+                    ->label(fn($record) => $record->active ? 'Unpublish' : 'Publish')
+                    ->icon(fn($record) => $record->active ? 'heroicon-o-eye-slash' : 'heroicon-o-eye')
+                    ->color(fn($record) => $record->active ? 'danger' : 'success')
                     ->action(function ($record) {
                         $record->update([
                             'active' => ! $record->active,
@@ -392,7 +410,7 @@ class StoryResource extends Resource
                             ->schema([
                                 Infolists\Components\TextEntry::make('status')
                                     ->badge()
-                                    ->color(fn (string $state): string => match ($state) {
+                                    ->color(fn(string $state): string => match ($state) {
                                         'published' => 'success',
                                         'scheduled' => 'warning',
                                         'expired' => 'danger',
@@ -405,7 +423,7 @@ class StoryResource extends Resource
                                     ->icon('heroicon-o-eye'),
 
                                 Infolists\Components\TextEntry::make('reading_time_minutes')
-                                    ->formatStateUsing(fn ($state) => $state.' minutes'),
+                                    ->formatStateUsing(fn($state) => $state . ' minutes'),
                             ]),
 
                         Infolists\Components\Grid::make(3)
@@ -425,7 +443,7 @@ class StoryResource extends Resource
                                         $rating = $record->average_rating;
                                         $count = $record->total_ratings;
 
-                                        return $rating > 0 ? number_format($rating, 1).' ★ ('.$count.' ratings)' : 'No ratings yet';
+                                        return $rating > 0 ? number_format($rating, 1) . ' ★ (' . $count . ' ratings)' : 'No ratings yet';
                                     }),
                             ]),
                     ]),

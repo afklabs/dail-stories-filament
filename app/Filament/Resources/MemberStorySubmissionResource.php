@@ -130,6 +130,20 @@ class MemberStorySubmissionResource extends Resource
                         'heroicon-o-x-circle' => 'rejected',
                     ]),
 
+                Tables\Columns\TextColumn::make('publishedStory.title')
+                    ->label('Published Story')
+                    ->searchable()
+                    ->sortable()
+                    ->url(fn($record) => $record->published_story_id
+                        ? route('filament.admin.resources.stories.edit', ['record' => $record->published_story_id])
+                        : null)
+                    ->openUrlInNewTab()
+                    ->badge()
+                    ->color('success')
+                    ->icon('heroicon-o-link')
+                    ->placeholder('Not published')
+                    ->wrap(),
+
                 Tables\Columns\TextColumn::make('submitted_at')
                     ->label('Submission Date')
                     ->dateTime('Y-m-d H:i')
@@ -176,6 +190,11 @@ class MemberStorySubmissionResource extends Resource
             ])
             ->defaultSort('submitted_at', 'desc');
     }
+
+
+
+
+
 
     public static function getRelations(): array
     {

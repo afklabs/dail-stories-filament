@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\FCMController;
 use App\Http\Controllers\API\FAQController;
+use App\Http\Controllers\API\EmailTrackingController;
+
 
 
 /*
@@ -312,3 +314,23 @@ Route::prefix('v1')
                 ->name('faqs.show');
         });
     });
+
+// ==========================================
+// Email Tracking Routes (No Auth Required)
+// ==========================================
+Route::get('/email-tracking/{trackingId}/open', [EmailTrackingController::class, 'trackOpen'])
+    ->name('email.tracking.open');
+
+Route::get('/email-tracking/{trackingId}/click', [EmailTrackingController::class, 'trackClick'])
+    ->name('email.tracking.click');
+
+// ==========================================
+// Password Reset Routes (No Auth Required)
+// ==========================================
+Route::post('/v1/members/forgot-password', [MemberController::class, 'forgotPassword'])
+    ->middleware('throttle:3,60') // 3 attempts per hour
+    ->name('members.forgot-password');
+
+Route::post('/v1/members/reset-password', [MemberController::class, 'resetPassword'])
+    ->middleware('throttle:5,60') // 5 attempts per hour
+    ->name('members.reset-password');

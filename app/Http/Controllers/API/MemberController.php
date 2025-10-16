@@ -32,11 +32,9 @@ use Carbon\Carbon;
 
 /**
  * Member API Controller - Final Optimized Version
- * 
  * Handles all member authentication and profile management for the Flutter mobile app.
  * Provides secure registration, login, profile management, and account operations.
  * All security vulnerabilities have been addressed and performance optimized.
- * 
  * Security Features:
  * - Enhanced input validation and sanitization
  * - SQL injection prevention through Eloquent ORM
@@ -915,13 +913,8 @@ class MemberController extends Controller
      * Initiate password reset process
      * 
      * Endpoint: POST /v1/members/forgot-password
-     * Rate Limit: 3 requests per minute per IP
+     * Rate Limit: 3 requests per hour per email
      * Authentication: Not required
-     * 
-     * Note: This is a placeholder implementation since password_reset_tokens table and mail are not configured yet
-     * 
-     * @param Request $request
-     * @return JsonResponse Password reset initiation response
      */
     public function forgotPassword(Request $request): JsonResponse
     {
@@ -931,59 +924,140 @@ class MemberController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return $this->errorResponse('Validation failed', 422, $validator->errors());
+                return $this->errorResponse('فشل التحقق من البيانات', 422, $validator->errors());
             }
 
             $email = strtolower(trim($request->input('email')));
 
-            // Rate limiting for forgot password requests
-            $rateLimitKey = 'forgot-password:' . $request->ip();
-            if (RateLimiter::tooManyAttempts($rateLimitKey, self::RATE_LIMIT_FORGOT_PASSWORD)) {
+            // Rate limiting for forgot password requests (3 per hour)
+            $rateLimitKey = 'forgot-password:' . hash('sha256', $email);
+            $attempts = Cache::get($rateLimitKey, 0);
+
+            if ($attempts >= 3) {
                 return $this->errorResponse(
-                    'Too many password reset requests. Please try again later.',
+                    'تم تجاوز الحد الأقصى للمحاولات. يرجى المحاولة مرة أخرى لاحقاً.',
                     429
                 );
             }
 
-            RateLimiter::hit($rateLimitKey, 300); // 5 minutes
+            // Increment rate limit counter
+            Cache::put($rateLimitKey, $attempts + 1, now()->addHour());
 
-            // For security, always return the same message regardless of email existence
-            // This prevents email enumeration attacks
-            $message = 'If an account with this email exists, you will receive password reset instructions.';
-
-            // Check if member exists (for logging purposes only)
+            // Find member
             $member = Member::where('email', $email)->first();
 
-            if ($member && $member->status === 'active') {
-                Log::info('Password reset requested for valid account', [
-                    'email_hash' => hash('sha256', $email), // Don't log actual email
-                    'member_id' => $member->id,
-                    'ip' => $request->ip(),
-                ]);
-
-                // TODO: Implement actual password reset when mail is configured
-                // $this->passwordResetService->sendResetEmail($member);
-            } else {
-                Log::info('Password reset requested for invalid/inactive account', [
+            // Always return success to prevent email enumeration
+            if (!$member) {
+                Log::info('Password reset requested for non-existent email', [
                     'email_hash' => hash('sha256', $email),
                     'ip' => $request->ip(),
-                    'member_exists' => $member !== null,
-                    'member_status' => $member?->status ?? 'not_found',
                 ]);
+
+                return $this->successResponse(
+                    ['message' => 'إذا كان البريد الإلكتروني مسجلاً، ستتلقى رسالة لإعادة تعيين كلمة المرور.'],
+                    'تم إرسال رسالة إعادة تعيين كلمة المرور'
+                );
             }
 
-            return $this->successResponse([
-                'requested_at' => now()->toISOString(),
-                'next_steps' => 'Check your email for reset instructions if the account exists.',
-            ], $message);
-        } catch (\Exception $e) {
-            Log::error('Forgot password error', [
-                'error' => $e->getMessage(),
-                'email_hash' => isset($email) ? hash('sha256', $email) : 'unknown',
+            // Send reset email
+            $passwordResetService = app(PasswordResetService::class);
+            $emailSent = $passwordResetService->sendResetEmail($member);
+
+            if (!$emailSent) {
+                Log::error('Failed to send password reset email', [
+                    'member_id' => $member->id,
+                    'email' => $member->email,
+                ]);
+
+                return $this->errorResponse(
+                    'فشل إرسال رسالة إعادة تعيين كلمة المرور. يرجى المحاولة مرة أخرى.',
+                    500
+                );
+            }
+
+            Log::info('Password reset email sent', [
+                'member_id' => $member->id,
+                'email' => $member->email,
                 'ip' => $request->ip(),
             ]);
 
-            return $this->errorResponse('Failed to process password reset request', 500);
+            return $this->successResponse(
+                [
+                    'message' => 'تم إرسال رسالة إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.',
+                    'expires_in' => '2 hours',
+                ],
+                'تم إرسال رسالة إعادة تعيين كلمة المرور'
+            );
+        } catch (\Exception $e) {
+            Log::error('Forgot password error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return $this->errorResponse('حدث خطأ. يرجى المحاولة مرة أخرى.', 500);
+        }
+    }
+
+    /**
+     * Reset password using token
+     * 
+     * Endpoint: POST /v1/members/reset-password
+     * Authentication: Not required
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|max:255',
+                'token' => 'required|string',
+                'password' => [
+                    'required',
+                    'string',
+                    'min:8',
+                    'max:128',
+                    'confirmed',
+                    'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]/',
+                ],
+            ]);
+
+            if ($validator->fails()) {
+                return $this->errorResponse('فشل التحقق من البيانات', 422, $validator->errors());
+            }
+
+            $email = strtolower(trim($request->input('email')));
+            $token = $request->input('token');
+            $newPassword = $request->input('password');
+
+            // Reset password
+            $passwordResetService = app(PasswordResetService::class);
+            $success = $passwordResetService->resetPassword($email, $token, $newPassword);
+
+            if (!$success) {
+                return $this->errorResponse(
+                    'رمز إعادة تعيين كلمة المرور غير صالح أو منتهي الصلاحية.',
+                    400
+                );
+            }
+
+            Log::info('Password reset successful', [
+                'email' => $email,
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->successResponse(
+                [
+                    'message' => 'تم تغيير كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول باستخدام كلمة المرور الجديدة.',
+                    'redirect_to_login' => true,
+                ],
+                'تم تغيير كلمة المرور بنجاح'
+            );
+        } catch (\Exception $e) {
+            Log::error('Reset password error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return $this->errorResponse('حدث خطأ. يرجى المحاولة مرة أخرى.', 500);
         }
     }
 

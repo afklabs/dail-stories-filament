@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
-use App\Models\Story;
-use App\Observers\StoryObserver;
+use App\Services\EmailService;
+use App\Services\PasswordResetService;
+
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -18,6 +20,18 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
+
+        // Register EmailService as singleton
+        $this->app->singleton(EmailService::class, function ($app) {
+            return new EmailService();
+        });
+
+        // Register PasswordResetService with EmailService dependency
+        $this->app->singleton(PasswordResetService::class, function ($app) {
+            return new PasswordResetService(
+                $app->make(EmailService::class)
+            );
+        });
     }
 
     /**

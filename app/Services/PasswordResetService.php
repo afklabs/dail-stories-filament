@@ -13,18 +13,16 @@ use Illuminate\Support\Str;
 /**
  * Password Reset Service
  * 
- * Handles password reset functionality for members.
- * This is a placeholder implementation since mail is not configured yet.
- * 
- * TODO: Implement actual email sending when mail configuration is complete.
- * 
- * @author Development Team
- * @version 1.0.0
+ * Handles password reset functionality for members with email integration
  */
 class PasswordResetService
 {
+    public function __construct(
+        private EmailService $emailService
+    ) {}
+
     /**
-     * Send password reset email (placeholder)
+     * Send password reset email
      * 
      * @param Member $member
      * @return bool
@@ -34,7 +32,7 @@ class PasswordResetService
         try {
             // Generate secure reset token
             $token = Str::random(60);
-            
+
             // Store token in database
             DB::table('password_reset_tokens')->updateOrInsert(
                 ['email' => $member->email],
@@ -44,25 +42,15 @@ class PasswordResetService
                 ]
             );
 
-            // TODO: Send email when mail configuration is ready
-            // Example implementation:
-            /*
-            Mail::to($member->email)->send(new PasswordResetMail([
-                'member' => $member,
-                'token' => $token,
-                'reset_url' => config('app.frontend_url') . '/reset-password?token=' . $token . '&email=' . urlencode($member->email),
-                'expires_at' => now()->addHours(2),
-            ]));
-            */
+            // Send email using EmailService
+            $this->emailService->sendPasswordResetEmail($member, $token);
 
-            Log::info('Password reset token generated', [
+            Log::info('Password reset email sent successfully', [
                 'member_id' => $member->id,
                 'email' => $member->email,
-                'token_length' => strlen($token),
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             Log::error('Failed to send password reset email', [
                 'member_id' => $member->id,
@@ -93,10 +81,15 @@ class PasswordResetService
 
         // Check if token has expired (2 hours)
         if (now()->diffInHours($resetRecord->created_at) > 2) {
-            $this->deleteResetToken($email);
+            // Delete expired token
+            DB::table('password_reset_tokens')
+                ->where('email', $email)
+                ->delete();
+
             return false;
         }
 
+        // Verify token
         return Hash::check($token, $resetRecord->token);
     }
 
@@ -110,37 +103,39 @@ class PasswordResetService
      */
     public function resetPassword(string $email, string $token, string $newPassword): bool
     {
-        try {
-            if (!$this->verifyResetToken($email, $token)) {
-                return false;
-            }
+        // Verify token first
+        if (!$this->verifyResetToken($email, $token)) {
+            return false;
+        }
 
+        try {
+            // Find member
             $member = Member::where('email', $email)->first();
+
             if (!$member) {
                 return false;
             }
 
-            DB::transaction(function () use ($member, $newPassword, $email) {
-                // Update password
-                $member->update([
-                    'password' => Hash::make($newPassword),
-                    'password_changed_at' => now(),
-                ]);
+            // Update password
+            $member->update([
+                'password' => Hash::make($newPassword),
+                'password_changed_at' => now(),
+            ]);
 
-                // Revoke all existing tokens for security
-                $member->tokens()->delete();
+            // Delete used token
+            DB::table('password_reset_tokens')
+                ->where('email', $email)
+                ->delete();
 
-                // Delete reset token
-                $this->deleteResetToken($email);
-            });
+            // Revoke all existing tokens for security
+            $member->tokens()->delete();
 
-            Log::info('Password reset completed', [
+            Log::info('Password reset successful', [
                 'member_id' => $member->id,
-                'email' => $email,
+                'email' => $member->email,
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             Log::error('Password reset failed', [
                 'email' => $email,
@@ -152,26 +147,9 @@ class PasswordResetService
     }
 
     /**
-     * Delete reset token
-     * 
-     * @param string $email
-     * @return void
+     * Delete expired tokens (cleanup job)
      */
-    public function deleteResetToken(string $email): void
-    {
-        DB::table('password_reset_tokens')
-            ->where('email', $email)
-            ->delete();
-    }
-
-    /**
-     * Cleanup expired reset tokens
-     * 
-     * This method should be called periodically (e.g., via scheduled job)
-     * 
-     * @return int Number of deleted tokens
-     */
-    public function cleanupExpiredTokens(): int
+    public function deleteExpiredTokens(): int
     {
         return DB::table('password_reset_tokens')
             ->where('created_at', '<', now()->subHours(2))

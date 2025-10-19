@@ -143,7 +143,7 @@ class MemberController extends Controller
                     'gender' => $validated['gender'] ?? null,
                     'status' => 'active',
                     'last_login_at' => now(),
-                    'email_verified_at' => null(),
+                    'email_verified_at' => null,
                     'registration_ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
                 ]);

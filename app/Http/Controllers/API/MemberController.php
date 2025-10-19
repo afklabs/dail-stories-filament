@@ -31,6 +31,8 @@ use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\URL;
 use App\Http\Controllers\API\EmailVerificationController;
+use App\Jobs\SendWelcomeEmail;
+use App\Jobs\SendVerificationEmail;
 
 
 
@@ -149,8 +151,13 @@ class MemberController extends Controller
                 ]);
 
                 try {
-                    app(\App\Services\EmailService::class)->sendWelcomeEmail($member);
+                    // Queue emails for background processing
+                    \App\Jobs\SendWelcomeEmail::dispatch($member);
+                    \App\Jobs\SendVerificationEmail::dispatch($member);
 
+                    Log::info('Registration emails queued', [
+                        'member_id' => $member->id,
+                    ]);
                     Log::info('Welcome email sent successfully', [
                         'member_id' => $member->id,
                         'email' => $member->email,
@@ -161,18 +168,6 @@ class MemberController extends Controller
                         'error' => $e->getMessage(),
                     ]);
                 }
-                // Generate verification URL
-                $verificationUrl = URL::temporarySignedRoute(
-                    'api.v1.email.verify',
-                    now()->addMinutes(1440), // 24 hours
-                    [
-                        'id' => $member->id,
-                        'hash' => sha1($member->getEmailForVerification()),
-                    ]
-                );
-
-                // Send verification email
-                app(\App\Services\EmailService::class)->sendEmailVerification($member, $verificationUrl);
 
                 // Create secure API token with limited scope and expiration
                 $tokenResult = $member->createToken(

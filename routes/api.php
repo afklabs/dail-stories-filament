@@ -342,14 +342,14 @@ Route::post('/v1/members/reset-password', [MemberController::class, 'resetPasswo
 // Email verification routes (protected by auth)
 // ==========================================
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
-        ->name('email.resend');
+    Route::post('/v1/email/resend', [EmailVerificationController::class, 'resend'])
+        ->name('api.v1.email.resend');
 
-    Route::get('/email/status', [EmailVerificationController::class, 'status'])
-        ->name('email.status');
+    Route::get('/v1/email/status', [EmailVerificationController::class, 'status'])
+        ->name('api.v1.email.status');
 });
 
 // Public email verification (signed URL)
-Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-    ->name('email.verify')
+Route::get('/v1/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->name('api.v1.email.verify')
     ->middleware('signed');

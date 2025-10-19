@@ -1,6 +1,6 @@
 <?php
 
-// File: app/Http/Controllers/API/EmailVerificationController.php
+declare(strict_types=1);
 
 namespace App\Http\Controllers\API;
 
@@ -14,20 +14,45 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 
+/**
+ * Email Verification Controller
+ * 
+ * Handles email verification process for members including:
+ * - Email verification via signed URL
+ * - Resending verification emails
+ * - Checking verification status
+ * 
+ * @package App\Http\Controllers\API
+ */
 class EmailVerificationController extends Controller
 {
-    private const RATE_LIMIT_RESEND = 3; // 3 requests per minute
-    private const VERIFICATION_LINK_EXPIRES = 1440; // 24 hours in minutes
+    /**
+     * Maximum resend attempts per minute
+     */
+    private const RATE_LIMIT_RESEND = 3;
 
+    /**
+     * Verification link expiration time in minutes (24 hours)
+     */
+    private const VERIFICATION_LINK_EXPIRES = 1440;
+
+    /**
+     * Constructor with dependency injection
+     *
+     * @param EmailService $emailService Email service for sending verification emails
+     */
     public function __construct(
         private EmailService $emailService
     ) {}
 
     /**
-     * Verify email with token
+     * Verify member email using signed URL
+     * 
+     * Validates the verification link and marks the email as verified
+     * if all checks pass (signature, expiration, hash).
      *
-     * @param Request $request
-     * @return JsonResponse
+     * @param Request $request HTTP request containing verification parameters
+     * @return JsonResponse Verification result
      */
     public function verify(Request $request): JsonResponse
     {
@@ -40,38 +65,38 @@ class EmailVerificationController extends Controller
                 'signature' => 'required|string',
             ]);
 
-            // Find member
+            // Find member by ID
             $member = Member::findOrFail($request->id);
 
-            // Check if already verified
+            // Check if email is already verified
             if ($member->hasVerifiedEmail()) {
-                return $this->successResponse(
-                    ['verified' => true],
-                    'Email already verified',
-                    200
-                );
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Email already verified',
+                    'data' => ['verified' => true],
+                ], 200);
             }
 
-            // Verify hash matches email
+            // Verify hash matches the member's email
             if (!hash_equals(
                 (string) $request->hash,
                 sha1($member->getEmailForVerification())
             )) {
-                return $this->errorResponse(
-                    'Invalid verification link',
-                    403
-                );
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid verification link',
+                ], 403);
             }
 
-            // Check if link expired
+            // Check if verification link has expired
             if ($request->expires < now()->timestamp) {
-                return $this->errorResponse(
-                    'Verification link has expired. Please request a new one.',
-                    410 // Gone
-                );
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Verification link has expired. Please request a new one.',
+                ], 410);
             }
 
-            // Verify signature
+            // Verify the URL signature to prevent tampering
             $url = URL::temporarySignedRoute(
                 'api.v1.email.verify',
                 now()->addMinutes(self::VERIFICATION_LINK_EXPIRES),
@@ -85,126 +110,149 @@ class EmailVerificationController extends Controller
                 (string) $request->signature,
                 hash_hmac('sha256', $url, config('app.key'))
             )) {
-                return $this->errorResponse(
-                    'Invalid verification signature',
-                    403
-                );
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid verification signature',
+                ], 403);
             }
 
             // Mark email as verified
             $member->markEmailAsVerified();
 
-            // Fire verified event
+            // Fire Laravel's verified event
             event(new Verified($member));
 
+            // Log successful verification
             Log::info('Email verified successfully', [
                 'member_id' => $member->id,
                 'email' => $member->email,
                 'ip' => $request->ip(),
             ]);
 
-            return $this->successResponse([
-                'verified' => true,
-                'verified_at' => $member->email_verified_at->toISOString(),
-                'member' => [
-                    'id' => $member->id,
-                    'email' => $member->email,
-                    'name' => $member->name,
+            return response()->json([
+                'success' => true,
+                'message' => 'Email verified successfully',
+                'data' => [
+                    'verified' => true,
+                    'verified_at' => $member->email_verified_at->toISOString(),
+                    'member' => [
+                        'id' => $member->id,
+                        'email' => $member->email,
+                        'name' => $member->name,
+                    ],
                 ],
-            ], 'Email verified successfully', 200);
+            ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->errorResponse('Member not found', 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Member not found',
+            ], 404);
         } catch (\Exception $e) {
             Log::error('Email verification error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return $this->errorResponse(
-                'Verification failed. Please try again.',
-                500
-            );
+            return response()->json([
+                'success' => false,
+                'message' => 'Verification failed. Please try again.',
+            ], 500);
         }
     }
 
     /**
-     * Resend verification email
+     * Resend verification email to authenticated member
+     * 
+     * Rate limited to prevent abuse (3 requests per minute).
+     * Only sends if email is not already verified.
      *
-     * @param Request $request
-     * @return JsonResponse
+     * @param Request $request HTTP request with authenticated user
+     * @return JsonResponse Result of resend attempt
      */
     public function resend(Request $request): JsonResponse
     {
         try {
-            // Rate limiting
+            // Apply rate limiting per user
             $rateLimitKey = 'verify-email-resend:' . $request->user()->id;
+
             if (RateLimiter::tooManyAttempts($rateLimitKey, self::RATE_LIMIT_RESEND)) {
-                return $this->errorResponse(
-                    'Too many requests. Please try again in ' .
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Too many requests. Please try again in ' .
                         ceil(RateLimiter::availableIn($rateLimitKey) / 60) . ' minutes.',
-                    429
-                );
+                ], 429);
             }
 
             $member = $request->user();
 
-            // Check if already verified
+            // Check if email is already verified
             if ($member->hasVerifiedEmail()) {
-                return $this->errorResponse(
-                    'Email is already verified',
-                    400
-                );
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email is already verified',
+                ], 400);
             }
 
             // Send verification email
             $this->sendVerificationEmail($member);
 
-            // Hit rate limiter
-            RateLimiter::hit($rateLimitKey, 60); // 1 minute
+            // Record rate limit attempt
+            RateLimiter::hit($rateLimitKey, 60); // 1 minute cooldown
 
+            // Log successful resend
             Log::info('Verification email resent', [
                 'member_id' => $member->id,
                 'email' => $member->email,
             ]);
 
-            return $this->successResponse([
-                'sent' => true,
-                'email' => $member->email,
-            ], 'Verification email sent successfully', 200);
+            return response()->json([
+                'success' => true,
+                'message' => 'Verification email sent successfully',
+                'data' => [
+                    'sent' => true,
+                    'email' => $member->email,
+                ],
+            ], 200);
         } catch (\Exception $e) {
             Log::error('Resend verification error', [
                 'member_id' => $request->user()->id ?? 'unknown',
                 'error' => $e->getMessage(),
             ]);
 
-            return $this->errorResponse(
-                'Failed to send verification email. Please try again.',
-                500
-            );
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send verification email. Please try again.',
+            ], 500);
         }
     }
 
     /**
-     * Check verification status
+     * Check email verification status for authenticated member
      *
-     * @param Request $request
-     * @return JsonResponse
+     * @param Request $request HTTP request with authenticated user
+     * @return JsonResponse Current verification status
      */
     public function status(Request $request): JsonResponse
     {
         $member = $request->user();
 
-        return $this->successResponse([
-            'verified' => $member->hasVerifiedEmail(),
-            'email' => $member->email,
-            'verified_at' => $member->email_verified_at?->toISOString(),
-        ], 'Email verification status retrieved', 200);
+        return response()->json([
+            'success' => true,
+            'message' => 'Email verification status retrieved',
+            'data' => [
+                'verified' => $member->hasVerifiedEmail(),
+                'email' => $member->email,
+                'verified_at' => $member->email_verified_at?->toISOString(),
+            ],
+        ], 200);
     }
 
     /**
-     * Send verification email
+     * Send verification email to member
+     * 
+     * Generates a signed URL and sends it via EmailService.
      *
-     * @param Member $member
+     * @param Member $member Member to send verification email to
      * @return void
      */
     private function sendVerificationEmail(Member $member): void
@@ -221,7 +269,7 @@ class EmailVerificationController extends Controller
             data: [
                 'member' => $member,
                 'verificationUrl' => $verificationUrl,
-                'expiresIn' => self::VERIFICATION_LINK_EXPIRES / 60, // hours
+                'expiresIn' => self::VERIFICATION_LINK_EXPIRES / 60, // Convert to hours
             ],
             memberId: $member->id,
             metadata: [
@@ -232,10 +280,12 @@ class EmailVerificationController extends Controller
     }
 
     /**
-     * Generate verification URL
+     * Generate signed verification URL for member
+     * 
+     * Creates a temporary signed route that expires after 24 hours.
      *
-     * @param Member $member
-     * @return string
+     * @param Member $member Member to generate URL for
+     * @return string Signed verification URL
      */
     private function generateVerificationUrl(Member $member): string
     {
@@ -247,34 +297,5 @@ class EmailVerificationController extends Controller
                 'hash' => sha1($member->getEmailForVerification()),
             ]
         );
-    }
-
-    /**
-     * Success response helper
-     */
-    private function successResponse(array $data, string $message, int $code = 200): JsonResponse
-    {
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'data' => $data,
-        ], $code);
-    }
-
-    /**
-     * Error response helper
-     */
-    private function errorResponse(string $message, int $code = 400, ?array $errors = null): JsonResponse
-    {
-        $response = [
-            'success' => false,
-            'message' => $message,
-        ];
-
-        if ($errors) {
-            $response['errors'] = $errors;
-        }
-
-        return response()->json($response, $code);
     }
 }

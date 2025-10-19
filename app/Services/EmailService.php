@@ -208,6 +208,7 @@ class EmailService
             data: [
                 'member' => $member,
                 'verificationUrl' => $verificationUrl,
+                'expiresIn' => 24, // ✅ أضفنا هذا السطر
             ],
             memberId: $member->id,
             metadata: [

@@ -29,6 +29,10 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\URL;
+use App\Http\Controllers\API\EmailVerificationController;
+
+
 
 /**
  * Member API Controller - Final Optimized Version
@@ -139,7 +143,7 @@ class MemberController extends Controller
                     'gender' => $validated['gender'] ?? null,
                     'status' => 'active',
                     'last_login_at' => now(),
-                    'email_verified_at' => now(), // Auto-verify for mobile app
+                    'email_verified_at' => null(),
                     'registration_ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
                 ]);
@@ -157,6 +161,18 @@ class MemberController extends Controller
                         'error' => $e->getMessage(),
                     ]);
                 }
+                // Generate verification URL
+                $verificationUrl = URL::temporarySignedRoute(
+                    'api.v1.email.verify',
+                    now()->addMinutes(1440), // 24 hours
+                    [
+                        'id' => $member->id,
+                        'hash' => sha1($member->getEmailForVerification()),
+                    ]
+                );
+
+                // Send verification email
+                app(\App\Services\EmailService::class)->sendEmailVerification($member, $verificationUrl);
 
                 // Create secure API token with limited scope and expiration
                 $tokenResult = $member->createToken(

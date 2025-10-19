@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Collection;
 use App\Models\MemberStoryInteraction;
 use App\Models\MemberReadingHistory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
+
 
 
 /**
@@ -109,7 +112,7 @@ use App\Models\MemberReadingHistory;
  */
 class Member extends Authenticatable implements FilamentUser
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, MustVerifyEmailTrait;
 
     /*
     |--------------------------------------------------------------------------
@@ -385,6 +388,34 @@ class Member extends Authenticatable implements FilamentUser
             }
         );
     }
+
+
+            /**
+             * Check if email is verified
+             */
+            public function hasVerifiedEmail(): bool
+            {
+                return !is_null($this->email_verified_at);
+            }
+
+            /**
+             * Mark email as verified
+             */
+            public function markEmailAsVerified(): bool
+            {
+                return $this->forceFill([
+                    'email_verified_at' => $this->freshTimestamp(),
+                ])->save();
+            }
+
+            /**
+             * Get email verification notification route
+             */
+            public function getEmailForVerification(): string
+            {
+                return $this->email;
+            }
+
 
     /*
     |--------------------------------------------------------------------------

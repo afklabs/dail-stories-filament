@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\FCMController;
 use App\Http\Controllers\API\FAQController;
 use App\Http\Controllers\API\EmailTrackingController;
+use App\Http\Controllers\API\EmailVerificationController;
 
 
 
@@ -334,3 +335,21 @@ Route::post('/v1/members/forgot-password', [MemberController::class, 'forgotPass
 Route::post('/v1/members/reset-password', [MemberController::class, 'resetPassword'])
     ->middleware('throttle:5,60') // 5 attempts per hour
     ->name('members.reset-password');
+
+
+
+// ==========================================
+// Email verification routes (protected by auth)
+// ==========================================
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
+        ->name('email.resend');
+
+    Route::get('/email/status', [EmailVerificationController::class, 'status'])
+        ->name('email.status');
+});
+
+// Public email verification (signed URL)
+Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->name('email.verify')
+    ->middleware('signed');

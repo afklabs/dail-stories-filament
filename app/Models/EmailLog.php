@@ -73,6 +73,10 @@ class EmailLog extends Model
     public const STATUS_FAILED = 'failed';
     public const STATUS_BOUNCED = 'bounced';
 
+    // Email Verification
+    public const TYPE_EMAIL_VERIFICATION = 'email_verification';
+
+
     /**
      * Relationships
      */

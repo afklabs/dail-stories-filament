@@ -96,7 +96,7 @@ class EmailService
         return $this->send(
             emailType: EmailLog::TYPE_WELCOME,
             recipientEmail: $member->email,
-            subject: 'مرحباً بك في قصة سهلة!',
+            subject: 'مرحباً بك في قصصي!',
             view: 'emails.welcome',
             data: [
                 'memberName' => $member->name,
@@ -188,5 +188,31 @@ class EmailService
             'open_rate' => $sent > 0 ? round(($opened / $sent) * 100, 2) : 0,
             'click_rate' => $sent > 0 ? round(($clicked / $sent) * 100, 2) : 0,
         ];
+    }
+
+
+    /**
+     * Send email verification email
+     * 
+     * @param Member $member
+     * @param string $verificationUrl
+     * @return EmailLog
+     */
+    public function sendEmailVerification(Member $member, string $verificationUrl): EmailLog
+    {
+        return $this->send(
+            emailType: 'email_verification',
+            recipientEmail: $member->email,
+            subject: 'تأكيد البريد الإلكتروني - قصصي',
+            view: 'emails.verify-email',
+            data: [
+                'member' => $member,
+                'verificationUrl' => $verificationUrl,
+            ],
+            memberId: $member->id,
+            metadata: [
+                'verification_url' => $verificationUrl,
+            ]
+        );
     }
 }

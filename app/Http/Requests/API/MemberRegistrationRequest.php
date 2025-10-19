@@ -39,7 +39,7 @@ class MemberRegistrationRequest extends FormRequest
                 'min:8',
                 'max:128',
                 'confirmed',
-                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/'
+                'regex:/^[A-Za-z\d]+$/'
             ],
             'device_id' => 'nullable|string|max:255|regex:/^[a-zA-Z0-9\-_]+$/',
             'phone' => [

@@ -144,6 +144,20 @@ class MemberController extends Controller
                     'user_agent' => $request->userAgent(),
                 ]);
 
+                try {
+                    app(\App\Services\EmailService::class)->sendWelcomeEmail($member);
+
+                    Log::info('Welcome email sent successfully', [
+                        'member_id' => $member->id,
+                        'email' => $member->email,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Welcome email failed but registration succeeded', [
+                        'member_id' => $member->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
                 // Create secure API token with limited scope and expiration
                 $tokenResult = $member->createToken(
                     name: 'mobile-app-' . now()->format('Y-m-d-H-i-s'),

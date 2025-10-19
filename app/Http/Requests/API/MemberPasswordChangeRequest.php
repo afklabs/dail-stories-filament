@@ -25,7 +25,7 @@ class MemberPasswordChangeRequest extends FormRequest
                 'max:128',
                 'confirmed',
                 'different:current_password',
-                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/'
+                'regex:/^[A-Za-z\d]+$/'
             ],
         ];
     }
@@ -33,10 +33,10 @@ class MemberPasswordChangeRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
-            'password.different' => 'New password must be different from current password.',
-            'password.confirmed' => 'Password confirmation does not match.',
-            'current_password.required' => 'Current password is required.',
+            'password.regex' => 'كلمة المرور يجب أن تكون 8 أحرف على الأقل من حروف وأرقام',
+            'password.different' => 'كلمة المرور الجديدة يجب أن تختلف عن الحالية',
+            'password.confirmed' => 'تأكيد كلمة المرور غير متطابق',
+            'current_password.required' => 'كلمة المرور الحالية مطلوبة',
         ];
     }
 }
